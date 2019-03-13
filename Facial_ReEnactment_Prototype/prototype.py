@@ -17,6 +17,7 @@ def dlib_rect_to_bb(rect):
 
 sourceName = 'source.mp4'
 targetName = 'target.mp4'
+predictor_data = 'shape_predictor_68_face_landmarks.dat'
 
 source = cv2.VideoCapture(sourceName)
 target = cv2.VideoCapture(targetName)
@@ -30,13 +31,7 @@ frameTime = 1/24
 print(frameTime)
 
 face_detector = dlib.get_frontal_face_detector()
-landmark_predictor = dlib.shape_predictor()
-
-
-
-
-
-
+landmark_predictor = dlib.shape_predictor(predictor_data)
 
 fig = plt.figure()
 srcWindow = fig.add_subplot(121)
@@ -81,11 +76,15 @@ while targetSuccess and sourceSuccess:
     trgPlot.set_data(targetFrame)
 
     x,y,w,h = dlib_rect_to_bb(srcBB)
-    srcPlot.add_patch(matplotlib.patches.Rectangle((x,y), w, h))
+    srcWindow.add_patch(matplotlib.patches.Rectangle((x,y), w, h, fill=False))
+    for i in range(0,68):
+        srcWindow.add_patch(matplotlib.patches.Circle((srcLandmarks.part(i).x, srcLandmarks.part(i).y), 5))
     x,y,w,h = dlib_rect_to_bb(trgBB)
-    trgPlot.add_patch(matplotlib.patches.Rectangle((x,y),w,h))
+    trgWindow.add_patch(matplotlib.patches.Rectangle((x,y),w,h, fill= False))
+    for i in range(0,68):
+        trgWindow.add_patch(matplotlib.patches.Circle((trgLandmarks.part(i).x, trgLandmarks.part(i).y), 5))
 
-    plt.pause(frameTime)
+    plt.pause(0.1)
 
 source.release()
 target.release()

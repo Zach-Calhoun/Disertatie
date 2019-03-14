@@ -2,6 +2,7 @@
 
 import cv2
 import dlib
+import numpy as np
 from transforms import landmarks_to_points, triangles_to_verts
 
 def get_scaled_rgb_frame(source : cv2.VideoCapture, scale : float, ):
@@ -30,4 +31,15 @@ def triangulate_landmarks(landmarks, height, width):
     triangles = subdiv.getTriangleList()
     triangles = triangles_to_verts(triangles)
     return triangles
+
+def get_transforms(sourceTriangles, targetTriangles):
+    transforms = []
+    for srcTri, trgTri in zip(sourceTriangles, targetTriangles):
+        srcPts = np.float32([[srcTri[0,:], srcTri[1,:], srcTri[2,:]]])
+        srcBB = cv2.boundingRect(srcPts)
+        trgPts = np.float32([[trgTri[0,:], trgTri[1,:], trgTri[2,:]]])
+        trgBB = cv2.boundingRect(srcPts)
+        M = cv2.getAffineTransform(srcPts, trgPts)
+        transforms.append((M, srcBB, trgBB))
+    return transforms
 

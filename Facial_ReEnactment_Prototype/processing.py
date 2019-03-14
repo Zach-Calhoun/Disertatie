@@ -22,6 +22,7 @@ def get_face_bb_landmarks(frame, face_detector, landmark_predictor):
     landmarks = landmarks_to_points(landmarks)
     return (bounding_box, landmarks)
 
+
 def triangulate_landmarks(landmarks, height, width):
     subdiv = cv2.Subdiv2D((0,0,height, width))
     for pts in landmarks:
@@ -38,7 +39,7 @@ def get_transforms(sourceTriangles, targetTriangles):
         srcPts = np.float32([[srcTri[0,:], srcTri[1,:], srcTri[2,:]]])
         srcBB = cv2.boundingRect(srcPts)
         trgPts = np.float32([[trgTri[0,:], trgTri[1,:], trgTri[2,:]]])
-        trgBB = cv2.boundingRect(srcPts)
+        trgBB = cv2.boundingRect(trgPts)
         M = cv2.getAffineTransform(srcPts, trgPts)
         transforms.append((M, srcBB, trgBB))
     return transforms

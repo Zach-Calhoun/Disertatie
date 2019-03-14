@@ -7,8 +7,12 @@ import matplotlib.pyplot as plt
 import time
 import dlib
 from profiling import PerformanceTimer
-from transforms import dlib_rect_to_bb, landmarks_to_points
+from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms
+from visualisation import view_landmarks, debug_fill_triangles
+
+
+DEBUG_TRIANGLES = False
 
 profiler = PerformanceTimer()
 
@@ -79,27 +83,20 @@ while targetSuccess and sourceSuccess:
     im_h,im_w = sourceFrame.shape[:2]
     
 
-    #TODO , do not triangulate eachtime, use frame deltas, otherwise triangulation will be unstable
-    profiler.tick("Triangulat Landmarks")
+    #instead of triangulating both, triangulate only source, then use landmark indices ( which should be fixed points ) 
+    #to obtain the second triangulation to obtain matching triangle areas
+    profiler.tick("Triangulate Landmarks")
     srcTriangles = triangulate_landmarks(srcLandmarks, im_h, im_w)
-    trgTriangles = triangulate_landmarks(trgLandmarks, im_h, im_w)
+    srcLandmarkTrianglesIndices, srcTriangles = verts_to_indices(srcTriangles, srcLandmarks)
+    trgTriangles = landmark_indices_to_triangles(trgLandmarks, srcLandmarkTrianglesIndices)
+
     profiler.tock()
 
-    landmarks = zip(srcLandmarks, trgLandmarks)
     
-    #combining sequences to reduce loop overhead
-
-    for srcPoint, trgPoint in landmarks:
-        srcWindow.add_patch(matplotlib.patches.Circle(srcPoint, 1))
-        trgWindow.add_patch(matplotlib.patches.Circle(trgPoint, 1))
-
-    for srcTri, trgTri in zip(srcTriangles, trgTriangles):
-        color = np.uint8(np.random.uniform(0, 255, 3))
-        c = tuple(map(int, color))
-        srcWindow.add_patch(matplotlib.patches.Polygon(srcTri, True, fill=False))
-        cv2.fillConvexPoly(sourceFrame, np.int32(srcTri),c, 16, 0)
-        trgWindow.add_patch(matplotlib.patches.Polygon(trgTri, True, fill=False))
-        cv2.fillConvexPoly(targetFrame, np.int32(trgTri),c, 16, 0)
+    
+    view_landmarks(srcLandmarks, trgLandmarks, srcWindow, trgWindow)
+    if(DEBUG_TRIANGLES):
+        debug_fill_triangles(srcTriangles, trgTriangles, srcWindow, trgWindow, sourceFrame, targetFrame)
     
     srcPlot.set_data(sourceFrame)
     trgPlot.set_data(targetFrame)
@@ -111,7 +108,8 @@ while targetSuccess and sourceSuccess:
     resFrame = np.copy(targetFrame)
     for i, transform in enumerate(transforms):
         #skip while debugging triangles
-        continue
+        if(DEBUG_TRIANGLES):
+            continue
         srcTri = srcTriangles[i]
         trgTri = trgTriangles[i]
         srcLocalTris = []
@@ -120,18 +118,25 @@ while targetSuccess and sourceSuccess:
         if(trgBB[2] > im_h or trgBB[3] > im_w or srcBB[2] > im_h or srcBB[3] > im_w):
             continue
 
+        #keep in mind the target has become our data source
+        #and we need to wrap it with source as reference for dimensions 
+
         for j in range(0,3):
             srcLocalTriangle = (srcTri[j][0] - srcBB[0], srcTri[j][1] - srcBB[1])
             trgLocalTriangle = (trgTri[j][0] - trgBB[0], trgTri[j][1] - trgBB[1])
             srcLocalTris.append(srcLocalTriangle)
             trgLocalTris.append(trgLocalTriangle)
-        srcCrop = sourceFrame[srcBB[1] : srcBB[1] + srcBB[3], srcBB[0] : srcBB[0] + srcBB[2]]
-        trgCrop = cv2.warpAffine(srcCrop, M, (trgBB[2], trgBB[3]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+        #our source are pixels from the target image
+        srcCrop = targetFrame[trgBB[1] : trgBB[1] + trgBB[3], trgBB[0] : trgBB[0] + trgBB[2]]
+        #target is the result image
+        #dimensions will corespond to the original expresion source
+        trgCrop = cv2.warpAffine(srcCrop, M, (srcBB[2], srcBB[3]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
         mask = np.zeros((srcBB[3], srcBB[2], 3), dtype = np.float32)
         cv2.fillConvexPoly(mask, np.int32(trgLocalTris),(1.0, 1.0, 1.0), 16, 0)
         trgCrop = trgCrop * mask
         resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] * ((1.0,1.0,1.0) - mask)
         resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] + trgCrop
+        
     #convert in a neutral scale invariant space
     resPlot.set_data(resFrame)
     #move stuff arround

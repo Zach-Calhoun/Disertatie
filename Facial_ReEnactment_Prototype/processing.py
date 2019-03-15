@@ -38,9 +38,18 @@ def get_transforms(sourceTriangles, targetTriangles):
     for srcTri, trgTri in zip(sourceTriangles, targetTriangles):
         srcPts = np.float32([[srcTri[0,:], srcTri[1,:], srcTri[2,:]]])
         srcBB = cv2.boundingRect(srcPts)
+        localSrcPts = []
+        for i in range(0,3):
+            localPt = (srcTri[i][0] - srcBB[0] , srcTri[i][1] - srcBB[1])
+            localSrcPts.append(localPt)
+
         trgPts = np.float32([[trgTri[0,:], trgTri[1,:], trgTri[2,:]]])
         trgBB = cv2.boundingRect(trgPts)
-        M = cv2.getAffineTransform(srcPts, trgPts)
-        transforms.append((M, srcBB, trgBB))
+        localTrgPts = []
+        for i in range(0,3):
+            localPt = (trgTri[i][0] - trgBB[0] , trgTri[i][1] - trgBB[1])
+            localTrgPts.append(localPt)
+        M = cv2.getAffineTransform(np.float32(localTrgPts), np.float32(localSrcPts))
+        transforms.append((M, srcBB, localSrcPts, trgBB, localTrgPts))
     return transforms
 

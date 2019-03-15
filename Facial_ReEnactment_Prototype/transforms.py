@@ -70,3 +70,14 @@ def landmark_indices_to_triangles(landmarks, indices):
         triangle_list.append(verts)
     
     return triangle_list
+
+def apply_transform(landmarks, matrix):
+    new_landmarks = []
+    for landmark in landmarks:
+        #tmp = np.array([[landmark[0]],[landmark[1]],[1]])
+        tmp = np.array([landmark[0],landmark[1],1])
+        res = np.dot(matrix, tmp)
+        new_lm = (res[0],res[1])
+        new_landmarks.append(new_lm)
+    return new_landmarks
+    

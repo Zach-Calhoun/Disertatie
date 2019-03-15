@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import time
 import dlib
 from profiling import PerformanceTimer
-from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles
+from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles, apply_transform
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms
 from visualisation import view_landmarks, debug_fill_triangles
 
@@ -44,16 +44,16 @@ landmark_predictor = dlib.shape_predictor(predictor_data)
 fig = plt.figure()
 
 #source frame
-srcWindow = fig.add_subplot(231)
+srcWindow = fig.add_subplot(131)
 #target frame
-trgWindow = fig.add_subplot(232)
+trgWindow = fig.add_subplot(132)
 #result frame
-resWindow = fig.add_subplot(233)
+resWindow = fig.add_subplot(133)
 
 #source local face space
-src_face_space_window = fig.add_subplot(234)
+#src_face_space_window = fig.add_subplot(234)
 #target local face space
-trg_face_space_window = fig.add_subplot(235)
+#trg_face_space_window = fig.add_subplot(235)
 
 scalingFactor = 0.25
 sourceSuccess, sourceFrame = get_scaled_rgb_frame(source, scalingFactor)
@@ -80,18 +80,32 @@ while targetSuccess and sourceSuccess:
 
     #convert to gray for detection
     profiler.tick("Get Face BB and landmarks")
-
+    im_h,im_w = sourceFrame.shape[:2]
+    
     #this is very slow, google says face detection is slow compared to landmark extraction
     #TODO extract face region more rarely, maybe even half the rate of landmark prediction
     srcBB, srcLandmarks = get_face_bb_landmarks(sourceFrame, face_detector, landmark_predictor)
     trgBB, trgLandmarks = get_face_bb_landmarks(targetFrame, face_detector, landmark_predictor)
     
-    sourceAxes = [srcLandmarks[FACE_AXIS_TOP_INDEX], srcLandmarks[FACE_AXIS_RIGHT_INDEX], srcLandmarks[FACE_AXIS_BOTTOM_INDEX], srcLandmarks[FACE_AXIS_LEFT_INDEX]]
-    targetAxes = [trgLandmarks[FACE_AXIS_TOP_INDEX], trgLandmarks[FACE_AXIS_RIGHT_INDEX], trgLandmarks[FACE_AXIS_BOTTOM_INDEX], trgLandmarks[FACE_AXIS_LEFT_INDEX]]
+    sourceAxes = np.float32([(srcLandmarks[FACE_AXIS_TOP_INDEX][0], srcLandmarks[FACE_AXIS_TOP_INDEX][1]), 
+                            (srcLandmarks[FACE_AXIS_RIGHT_INDEX][0],srcLandmarks[FACE_AXIS_RIGHT_INDEX][1]),  
+                            
+                            (srcLandmarks[FACE_AXIS_LEFT_INDEX][0],srcLandmarks[FACE_AXIS_LEFT_INDEX][1])
+                            ])
+    targetAxes = np.float32([(trgLandmarks[FACE_AXIS_TOP_INDEX][0], trgLandmarks[FACE_AXIS_TOP_INDEX][1]), 
+                            (trgLandmarks[FACE_AXIS_RIGHT_INDEX][0],trgLandmarks[FACE_AXIS_RIGHT_INDEX][1]),  
+                         
+                            (trgLandmarks[FACE_AXIS_LEFT_INDEX][0],trgLandmarks[FACE_AXIS_LEFT_INDEX][1])
+                            ])
+
     target_to_source_T = cv2.getAffineTransform(targetAxes, sourceAxes)
     source_to_target_T = cv2.getAffineTransform(sourceAxes, targetAxes)
 
+    #for now just transform everything in source space, to see difference
+    targetFrame =  cv2.warpAffine(targetFrame, target_to_source_T, (im_w, im_h), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
 
+    #TODO go from target to source, perform calculations, but go back to target space when getting pixel data
+    trgLandmarks = apply_transform(trgLandmarks, target_to_source_T)
 
     profiler.tock()
     if srcBB is None or trgBB is None:
@@ -104,8 +118,7 @@ while targetSuccess and sourceSuccess:
     x,y,w,h = dlib_rect_to_bb(srcBB)
     srcWindow.add_patch(matplotlib.patches.Rectangle((x,y), w, h, fill=False))
     #triangulate
-    im_h,im_w = sourceFrame.shape[:2]
-    
+   
 
     #instead of triangulating both, triangulate only source, then use landmark indices ( which should be fixed points ) 
     #to obtain the second triangulation to obtain matching triangle areas

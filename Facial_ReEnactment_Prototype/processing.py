@@ -3,15 +3,20 @@
 import cv2
 import dlib
 import numpy as np
-from transforms import landmarks_to_points, triangles_to_verts
+import matplotlib
+import matplotlib.pyplot as plt
 
+from transforms import landmarks_to_points, triangles_to_verts, apply_transform
+from utils import *
 def get_scaled_rgb_frame(source : cv2.VideoCapture, scale : float, ):
+    """Captures RGB frame from openCV frame and scales it down for performance reasons, or up, depends on scale param"""
     success, frame = source.read()
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame = cv2.resize(frame, None, fx=scale, fy=scale)
     return (success, frame)
 
 def get_face_bb_landmarks(frame, face_detector, landmark_predictor):
+    """Retrieves face bounding box and landmarks"""
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
     bounding_box = face_detector(frame, 1)
     #for now assume one face only
@@ -24,6 +29,7 @@ def get_face_bb_landmarks(frame, face_detector, landmark_predictor):
 
 
 def triangulate_landmarks(landmarks, height, width):
+    """Calculated Delaunay Triangulation of given points"""
     subdiv = cv2.Subdiv2D((0,0,height, width))
     for pts in landmarks:
         cv_pt = (pts[1],pts[0])
@@ -34,6 +40,9 @@ def triangulate_landmarks(landmarks, height, width):
     return triangles
 
 def get_transforms(sourceTriangles, targetTriangles):
+    """Calculates affine transformations between each pair of supplied triangles
+    returns (transformation_matrix, source_triangle_bounding_box, source_triangle_points, target_triangle_boudning_box, target_triangle_points)
+    """
     transforms = []
     for srcTri, trgTri in zip(sourceTriangles, targetTriangles):
         srcPts = np.float32([[srcTri[0,:], srcTri[1,:], srcTri[2,:]]])
@@ -53,3 +62,58 @@ def get_transforms(sourceTriangles, targetTriangles):
         transforms.append((M, srcBB, localSrcPts, trgBB, localTrgPts))
     return transforms
 
+def get_face_coordinates_system(landmarks, preview_window = None):
+    """returns face center, xscale, yscale, rotationmatrix and landmarks in that coordinate system"""
+    leftAcc = np.array([0,0])
+    for i in LEFT_EYE_INDICES:
+        leftAcc += landmarks[i]
+    
+    rightAcc = np.array([0,0])
+    for i in RIGHT_EYE_INDICES:
+        rightAcc += landmarks[i]
+    #calculate eyes cog
+    leftEyePos = leftAcc / EYE_INDICES_COUNT
+    rightEyePos = rightAcc / EYE_INDICES_COUNT
+
+    #align eyes
+    dx = rightEyePos[0] - leftEyePos[0]
+    dy = rightEyePos[1] - leftEyePos[1]
+
+    #TODO why subtract 180?
+    angle = np.degrees(np.arctan2(dy,dx)) - 180
+    eyesC = (rightEyePos + leftEyePos)/2
+    #calculate center based on two main axes
+    rotM = cv2.getRotationMatrix2D((eyesC[0],eyesC[1]), angle, 1)
+    rotatedLandmarks =  apply_transform(landmarks, rotM)
+
+    face_top = np.array(rotatedLandmarks[FACE_AXIS_TOP_INDEX])
+    face_bottom = np.array(rotatedLandmarks[FACE_AXIS_BOTTOM_INDEX])
+    face_left = np.array(rotatedLandmarks[FACE_AXIS_LEFT_INDEX])
+    face_right = np.array(rotatedLandmarks[FACE_AXIS_RIGHT_INDEX])
+    vertical_axis_c = (face_top + face_bottom) / 2
+    horizontal_axis_c = (face_left + face_right) / 2
+    #consider face center is Y of vertical axis and X of horizontal
+    #TODO make use intersection?
+    vertical_axis_len = np.linalg.norm(face_top - face_bottom)
+    horizontal_axis_len = np.linalg.norm(face_left - face_right)
+    face_center = np.array((horizontal_axis_c[0], vertical_axis_c[1]))
+    #calculate landmark positions based on center
+    localLandmarks = []
+    for rl in rotatedLandmarks:
+        localLandmarks.append((np.array(rl) - face_center) / (horizontal_axis_len,vertical_axis_len))
+    
+    
+
+    #scale everything so that the two main axes go between [-1,1]
+    #* eyebrows will go above 1 in this case
+
+
+    if preview_window:
+        preview_window.clear()
+        #multiply by 100 because scatter points are to large for -1,1 scale
+        preview_window.scatter(np.array(localLandmarks)[:,0]*100,-np.array(localLandmarks)[:,1]*100)
+        preview_window.add_patch(matplotlib.patches.Circle((0,0), 1))
+
+
+    return (face_center, horizontal_axis_len, vertical_axis_len, rotM, localLandmarks)
+   

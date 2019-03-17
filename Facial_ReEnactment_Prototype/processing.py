@@ -115,5 +115,32 @@ def get_face_coordinates_system(landmarks, preview_window = None):
         preview_window.add_patch(matplotlib.patches.Circle((0,0), 1))
 
 
-    return (face_center, horizontal_axis_len, vertical_axis_len, rotM, localLandmarks)
+    #return (face_center, horizontal_axis_len, vertical_axis_len, rotM, localLandmarks)
+    #this is a kludge, suposed to return matrix, but sice it's not invertible, angle will do
+    return (face_center, horizontal_axis_len, vertical_axis_len, angle, localLandmarks)
    
+#TODO implement
+def triangles_to_image_space(triangles, rotM, faceCenter, scaleX, scaleY):
+    """STUB moves a set of triangles from face local space to target face's image space for later wrapping STUB"""
+    invRot = np.linalg.inv(rotM)
+    return None
+
+def landmarks_to_image_space(landmarks, rotM, faceCenter, scaleX, scaleY, preview_window = None):
+    """moves landmarks from local face space to target face's image space for later triangulation and wrapping"""
+    #opencv 2d roattion matrix can not be inverted, not without some extra operations, better just use reverse angle for now
+    #invRot = np.linalg.inv(rotM)
+    invRot = cv2.getRotationMatrix2D((0,0), -rotM, 1)
+    inv_rot_landmarks = apply_transform(landmarks, invRot)
+    target_image_landmarks = []
+    for local_landmark in inv_rot_landmarks:
+        #rescale landmarks up
+        target_landmark = np.array(local_landmark) * (scaleX, scaleY)
+        #calculate landmark position relative to target face center
+        target_landmark = target_landmark + faceCenter
+        #TODO see this approach's effect on eye positions
+        target_image_landmarks.append(target_landmark)
+    
+    return target_image_landmarks
+
+        
+    

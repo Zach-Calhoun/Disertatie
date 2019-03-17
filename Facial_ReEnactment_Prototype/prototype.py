@@ -10,7 +10,7 @@ import argparse
 
 from profiling import PerformanceTimer
 from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles, apply_transform
-from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system
+from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
 from visualisation import view_landmarks, debug_fill_triangles
 from utils import *
 
@@ -136,6 +136,7 @@ while targetSuccess and sourceSuccess:
     #PS : now triangulating just once 
     profiler.tick("Triangulate Landmarks")
     #TODO triangulate more than once, every few frames to adapt to chaning structure
+   
     srcTriangles = None
     if not generated_triangulation:
         srcTriangles = triangulate_landmarks(srcLandmarks, im_h, im_w)
@@ -143,13 +144,21 @@ while targetSuccess and sourceSuccess:
         #generated_triangulation = True
     else:
         srcTriangles = landmark_indices_to_triangles(srcLandmarks, srcLandmarkTrianglesIndices)
-    
-   
+
     trgTriangles = landmark_indices_to_triangles(trgLandmarks, srcLandmarkTrianglesIndices)
 
+    #todo account for face perspective rotation
+    #obtain landmark data in face space
     source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks,src_face_space_window )
     target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks,trg_face_space_window )
 
+    source_to_target_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale)
+    #generate local triangle data in face space using previous triangulation and new local landmarks
+    # source_local_triangles = landmark_indices_to_triangles(source_local_landmarks, srcLandmarkTrianglesIndices)
+    source_to_target_triangles = landmark_indices_to_triangles(source_to_target_landmarks, srcLandmarkTrianglesIndices)
+
+    
+    #move source local triangles to target local space and calculate from there
     if DEBUG_TRIANGLES and generated_colors == False:
         generated_colors = True
         for i in range(0, len(trgTriangles)):
@@ -167,8 +176,8 @@ while targetSuccess and sourceSuccess:
     srcPlot.set_data(sourceFrame)
     trgPlot.set_data(targetFrame)
 
-
-    transforms = get_transforms(srcTriangles, trgTriangles)
+    #TODO ignore edge landmarks when transforming, as to not affect target shape face, just inside features
+    transforms = get_transforms(source_to_target_triangles, trgTriangles)
     #srcLocalTris = []
     #trgLocalTris = []
     resFrame = np.copy(targetFrame)
@@ -176,7 +185,7 @@ while targetSuccess and sourceSuccess:
         #skip while debugging triangles
         if(DEBUG_TRIANGLES):
             continue
-        srcTri = srcTriangles[i]
+        srcTri = source_to_target_triangles[i]
         trgTri = trgTriangles[i]
         srcLocalTris = []
         trgLocalTris = []

@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args": ["--source","source.mp4","--target","target4.mp4"]
+            "args": ["--source","source.mp4","--target","target.mp4","--output","test.mp4"]
         },
         {
             "name": "Python: Remote Attach",

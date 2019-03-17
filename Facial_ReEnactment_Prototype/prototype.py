@@ -44,6 +44,9 @@ predictor_data = 'shape_predictor_68_face_landmarks.dat'
 
 source = cv2.VideoCapture(sourceName)
 target = cv2.VideoCapture(targetName)
+output = None
+
+
 
 #sourceVc = cv2.VideoCapture.open(sourceName)
 #targetVc = cv2.VideoCapture.open(targetName)
@@ -57,22 +60,36 @@ landmark_predictor = dlib.shape_predictor(predictor_data)
 
 fig = plt.figure()
 
+
+
 #source frame
-srcWindow = fig.add_subplot(231)
+#srcWindow = fig.add_subplot(231)
 #target frame
-trgWindow = fig.add_subplot(232)
+#trgWindow = fig.add_subplot(232)
 #result frame
-resWindow = fig.add_subplot(233)
+#resWindow = fig.add_subplot(233)
+
+
+#source frame
+srcWindow = fig.add_subplot(131)
+#target frame
+trgWindow = fig.add_subplot(132)
+#result frame
+resWindow = fig.add_subplot(133)
 
 #source local face space
-src_face_space_window = fig.add_subplot(234)
+#src_face_space_window = fig.add_subplot(234)
 #target local face space
-trg_face_space_window = fig.add_subplot(235)
+#trg_face_space_window = fig.add_subplot(235)
 
 scalingFactor = 0.25
 sourceSuccess, sourceFrame = get_scaled_rgb_frame(source, scalingFactor)
 targetSuccess, targetFrame = get_scaled_rgb_frame(target, scalingFactor)
+im_h,im_w = sourceFrame.shape[:2]
+trg_h, trg_w = targetFrame.shape[:2]
 
+if args.output:
+    output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), 20.0, (270, 480))
 #scalingFactor = 0.12
 srcPlot = srcWindow.imshow(sourceFrame)
 trgPlot = trgWindow.imshow(targetFrame)
@@ -153,8 +170,8 @@ while targetSuccess and sourceSuccess:
 
     #todo account for face perspective rotation
     #obtain landmark data in face space
-    source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks,src_face_space_window )
-    target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks,trg_face_space_window )
+    source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks )
+    target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks )
 
     source_to_target_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale, trgWindow)
     #generate local triangle data in face space using previous triangulation and new local landmarks
@@ -220,9 +237,9 @@ while targetSuccess and sourceSuccess:
         mask = np.zeros((srcBB[3], srcBB[2], 3), dtype = np.float32)
         cv2.fillConvexPoly(mask, np.int32(srcLocalTris),(1.0, 1.0, 1.0), 16, 0)
         trgCrop = trgCrop * mask
-        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = targetFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
-        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = targetFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
         if args.slow:
             resPlot.set_data(resFrame)
             plt.pause(frameTime)
@@ -231,7 +248,8 @@ while targetSuccess and sourceSuccess:
     #convert in a neutral scale invariant space
     resPlot.set_data(resFrame)
     #move stuff arround
-   
+    if output:
+        output.write(np.uint8(cv2.cvtColor(resFrame, cv2.COLOR_RGB2BGR)))
 
     profiler.tock()
     #clear patches
@@ -240,9 +258,8 @@ while targetSuccess and sourceSuccess:
         p.remove()
     for p in reversed(trgWindow.patches):
         p.remove()
-
 source.release()
 target.release()
-
+output.release()
 
 

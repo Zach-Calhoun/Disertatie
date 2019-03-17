@@ -8,8 +8,8 @@ def view_landmarks(srcLandmarks, trgLandmarks, srcWindow, trgWindow):
     #combining sequences to reduce loop overhead
     landmarks = zip(srcLandmarks, trgLandmarks)
     for srcPoint, trgPoint in landmarks:
-        srcWindow.add_patch(matplotlib.patches.Circle(srcPoint, 1))
-        trgWindow.add_patch(matplotlib.patches.Circle(trgPoint, 1))
+        srcWindow.add_patch(matplotlib.patches.Circle(srcPoint, 2))
+        trgWindow.add_patch(matplotlib.patches.Circle(trgPoint, 2))
 
 
 

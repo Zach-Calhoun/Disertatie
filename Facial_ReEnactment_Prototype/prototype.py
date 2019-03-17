@@ -18,7 +18,10 @@ parser = argparse.ArgumentParser(description='Facial re-enactment prototype from
 parser.add_argument("--source", metavar="/path/to/source.mp4", help="path to source video clip")
 parser.add_argument("--target", metavar="/path/to/target.mp4", help="path to target video clip")
 parser.add_argument("--output", required=False, metavar="output.mp4", help="output file path, optional")
-parser.add_argument("--debugtriangles", required=False, )
+parser.add_argument("--debugtriangles", required=False, action='store_true', help="specify this to see tracking triangles")
+parser.add_argument("--blank", required=False, action='store_true', help="include this to make the resulting face on top of a blank canvas, for easier inspection")
+parser.add_argument("--slow", required=False, action='store_true', help="include this to see the face reconstruction in a slow rate for debugging purposes")
+
 args = parser.parse_args()
 
 assert args.source, "Argument --source must be provided"
@@ -92,6 +95,7 @@ while targetSuccess and sourceSuccess:
     #convert to gray for detection
     profiler.tick("Get Face BB and landmarks")
     im_h,im_w = sourceFrame.shape[:2]
+    trg_h, trg_w = targetFrame.shape[:2]
     
     #this is very slow, google says face detection is slow compared to landmark extraction
     #TODO extract face region more rarely, maybe even half the rate of landmark prediction
@@ -152,7 +156,7 @@ while targetSuccess and sourceSuccess:
     source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks,src_face_space_window )
     target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks,trg_face_space_window )
 
-    source_to_target_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale)
+    source_to_target_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale, trgWindow)
     #generate local triangle data in face space using previous triangulation and new local landmarks
     # source_local_triangles = landmark_indices_to_triangles(source_local_landmarks, srcLandmarkTrianglesIndices)
     source_to_target_triangles = landmark_indices_to_triangles(source_to_target_landmarks, srcLandmarkTrianglesIndices)
@@ -177,10 +181,17 @@ while targetSuccess and sourceSuccess:
     trgPlot.set_data(targetFrame)
 
     #TODO ignore edge landmarks when transforming, as to not affect target shape face, just inside features
+    #TODO keep a reference point for each triangle so that at least one point remains static
+    #todo refactor this
     transforms = get_transforms(source_to_target_triangles, trgTriangles)
     #srcLocalTris = []
     #trgLocalTris = []
-    resFrame = np.copy(targetFrame)
+    resFrame = None
+    if args.blank:
+        resFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
+    else:
+        resFrame = np.copy(targetFrame)
+    
     for i, transform in enumerate(transforms):
         #skip while debugging triangles
         if(DEBUG_TRIANGLES):
@@ -190,8 +201,8 @@ while targetSuccess and sourceSuccess:
         srcLocalTris = []
         trgLocalTris = []
         M, srcBB, localSrcTriangle, trgBB, localTrgTriangle = transform
-        if(trgBB[2] > im_h or trgBB[3] > im_w or srcBB[2] > im_h or srcBB[3] > im_w):
-            continue
+        # if(trgBB[2] > im_h or trgBB[3] > im_w or srcBB[2] > im_h or srcBB[3] > im_w):
+        #     continue
 
         #keep in mind the target has become our data source
         #and we need to wrap it with source as reference for dimensions 
@@ -207,10 +218,14 @@ while targetSuccess and sourceSuccess:
         #dimensions will corespond to the original expresion source
         trgCrop = cv2.warpAffine(srcCrop, M, (srcBB[2], srcBB[3]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
         mask = np.zeros((srcBB[3], srcBB[2], 3), dtype = np.float32)
-        cv2.fillConvexPoly(mask, np.int32(trgLocalTris),(1.0, 1.0, 1.0), 16, 0)
+        cv2.fillConvexPoly(mask, np.int32(srcLocalTris),(1.0, 1.0, 1.0), 16, 0)
         trgCrop = trgCrop * mask
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + trgCrop
+        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = targetFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
+        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = targetFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        if args.slow:
+            resPlot.set_data(resFrame)
+            plt.pause(frameTime)
         # resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] * ((1.0,1.0,1.0) - mask)
         # resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] + trgCrop
     #convert in a neutral scale invariant space

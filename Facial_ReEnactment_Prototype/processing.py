@@ -139,6 +139,9 @@ def landmarks_to_image_space(landmarks, rotM, faceCenter, scaleX, scaleY, previe
         target_landmark = target_landmark + faceCenter
         #TODO see this approach's effect on eye positions
         target_image_landmarks.append(target_landmark)
+        if preview_window:
+            preview_window.add_patch(matplotlib.patches.Circle(target_landmark, 2, color='#FF0000'))
+    
     
     return target_image_landmarks
 

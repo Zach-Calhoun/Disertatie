@@ -3,8 +3,10 @@ predictor_data = 'shape_predictor_68_face_landmarks.dat'
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, get_face_coordinates_system
 from measures import sum_squared_euclideean_distances as ssed
 
+DISIMILARITY_TRESHHOLD = 0.1
+#TODO think about paralizing parts of these
+
 def get_expression_prototypes(source, srcScalingFactor,profiler=None):
-    DISIMILARITY_TRESHHOLD = 0.1
     source_prototype_faces = []
     source_frame_prototype_index = []
 
@@ -27,7 +29,7 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
 
         #convert to gray for detection
         profiler.tick("Get Face BB and landmarks")
-        im_h,im_w = sourceFrame.shape[:2]
+        #im_h,im_w = sourceFrame.shape[:2]
 
         srcBB, srcLandmarks = get_face_bb_landmarks(sourceFrame, face_detector, landmark_predictor)
         if(srcBB is None):
@@ -40,7 +42,7 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
             source_frame_prototype_index += [0]
             continue
 
-        #if similarity measure is > treshhold, we asume it's the same reference face
+        #if disimilarity measure is > treshhold, we asume it's the same reference face
         #if different, we store it as a separate landmark frame
 
         disimilarity_min = 99999999999999999999999999999999999
@@ -72,11 +74,11 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
 
 
 def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype_faces, profiler=None):
-    DISIMILARITY_TRESHHOLD = 0.1
+
+
     #TODO should these be stored as touples?
-    target_prototype_faces = []
-    target_prototype_faces_frames = []
-    maximum_similarity = []
+    target_prototype_faces_frames = {}
+    minimum_disimilarity = {}
 
     face_detector = dlib.get_frontal_face_detector()
     landmark_predictor = dlib.shape_predictor(predictor_data)
@@ -97,41 +99,35 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
 
         #convert to gray for detection
         profiler.tick("Get Face BB and landmarks")
-        im_h,im_w = targetFrame.shape[:2]
+        #im_h,im_w = targetFrame.shape[:2]
 
-        srcBB, srcLandmarks = get_face_bb_landmarks(targetFrame, face_detector, landmark_predictor)
-        if(srcBB is None):
+        trgBB, trgLandmarks = get_face_bb_landmarks(targetFrame, face_detector, landmark_predictor)
+        if(trgBB is None):
             print('Failed to find face in frame, skipping')
             continue
-        source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks)
+        target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks)
 
 
-        #if similarity measure is > treshhold, we asume it's matches the prototype face and store it as a match
+        #go through target faces and for each prototype face in source try and find the matches for each in each frame
         #while also storing the similarity value, if next frames have better similarity we replace the old matching
-        #frame
+        #frame per prototype
 
         disimilarity_min = 99999999999999999999999999999999999
         disimilarity_min_index = 0
         for p_index,prototype in enumerate(source_prototype_faces):
-            disimilarity = ssed(prototype, source_local_landmarks)
-            if(disimilarity < disimilarity_min):
-                disimilarity_min = disimilarity
-                disimilarity_min_index = p_index
+            disimilarity = ssed(prototype, target_local_landmarks)
             print('Calculated disimilarity between frame {} and prototype {}'.format(frameCount,p_index))
-            print(disimilarity_min)
-            if(disimilarity_min >  DISIMILARITY_TRESHHOLD):
-                print('Found new prototype')
-                source_prototype_faces += [source_local_landmarks]
-                source_frame_prototype_index += [p_index]
-                break
-        else:
-            print('Not unique enough, closest prototype is {}'.format(disimilarity_min_index))
-            source_frame_prototype_index += [disimilarity_min_index]
+            #if we started storing matches
+            if p_index in minimum_disimilarity:
+                if(disimilarity < minimum_disimilarity[p_index]):
+                    print('Found better match for prototype {} at frame {}'.format(p_index, frameCount))
+                    minimum_disimilarity[p_index] = disimilarity
+                    target_prototype_faces_frames[p_index] = targetFrame
+            #else take whatever
+            else:
+                minimum_disimilarity[p_index] = disimilarity
+                target_prototype_faces_frames[p_index] = targetFrame
 
-        #print unique prototypes and frame corespondence
-
-    print("Finished processing source video, found {} unique prototypes".format(len(source_prototype_faces)))
-    for prototype_index in source_frame_prototype_index:
-        print("#{}#".format(prototype_index), end='')    
+    print("Finished processing target video,")
         
-    return (source_prototype_faces, source_frame_prototype_index)
+    return target_prototype_faces_frames

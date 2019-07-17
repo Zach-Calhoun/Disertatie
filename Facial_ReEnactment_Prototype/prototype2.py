@@ -8,7 +8,7 @@ import time
 import dlib
 import argparse
 
-from expression_prototypes import get_expression_prototypes
+from expression_prototypes import get_expression_prototypes, get_matching_expression_prototypes
 from profiling import PerformanceTimer
 from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles, apply_transform
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
@@ -101,22 +101,15 @@ target_prototype_matching_faces = []
 
 source_prototype_faces, source_frame_prototype_index = get_expression_prototypes(source, srcScalingFactor, profiler)
 
+#go through target video and identify key face frames that  matched source video prototypes
+#use similarity measure to also point which reference face should be matched durring time measures
+
+target_prototype_frames = get_matching_expression_prototypes(target, trgScalingFactor, source_prototype_faces, profiler)
+
+
 
 frameCount = 1
 srcLandmarkTrianglesIndices = []
-
-
-#go through target video and identify key face frames that  matched source video prototypes
-#use similarity measure to also point which reference face should be matched durring time measures
-#thing video compression
-#[F1,F1,F1,F1...F3,F3,F3,F3,....F1,F1,F1,F1....F2,F2,F2,F2 etc]
-
-
-
-
-
-
-
 
 #exit early for now as still testing
 exit()

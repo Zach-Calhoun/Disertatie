@@ -1,6 +1,10 @@
 #measures.py
 import math
 
+#TODO add other measure
+#hausdroff?
+
+
 def sum_squared_euclideean_distances(landmarks1, landmarks2):
     """For best results, apply to points in local face space, to avoid
     differences caused by rotations / translation,

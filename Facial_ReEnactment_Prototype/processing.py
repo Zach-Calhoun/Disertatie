@@ -11,6 +11,8 @@ from utils import *
 def get_scaled_rgb_frame(source : cv2.VideoCapture, scale : float, ):
     """Captures RGB frame from openCV frame and scales it down for performance reasons, or up, depends on scale param"""
     success, frame = source.read()
+    if not success:
+        return (False, None)
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame = cv2.resize(frame, None, fx=scale, fy=scale)
     return (success, frame)
@@ -25,6 +27,8 @@ def get_face_bb_landmarks(frame, face_detector, landmark_predictor):
     bounding_box = bounding_box[0]
     landmarks = landmark_predictor(frame_gray, bounding_box)
     landmarks = landmarks_to_points(landmarks)
+    #skip edges
+    #landmarks = landmarks[16:]
     return (bounding_box, landmarks)
 
 
@@ -54,6 +58,10 @@ def get_transforms(sourceTriangles, targetTriangles):
 
         trgPts = np.float32([[trgTri[0,:], trgTri[1,:], trgTri[2,:]]])
         trgBB = cv2.boundingRect(trgPts)
+
+        if(np.any(np.array(srcBB) < 0) or np.any(np.array(trgBB) < 0)):
+            print('WHOOPS')
+
         localTrgPts = []
         for i in range(0,3):
             localPt = (trgTri[i][0] - trgBB[0] , trgTri[i][1] - trgBB[1])

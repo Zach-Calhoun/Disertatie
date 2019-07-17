@@ -1,0 +1,16 @@
+-- establish reference faces -- need expression analysis :(
+-- use relative landmark movements instead of transfering them -> might improve results
+
+-- establish unique faces in source
+-- search for matches in target
+
+-- use that for re-enactment
+
+-- figure what to do with mouth and closed eyes
+
+-- what do with lightning changes
+
+--EMAIL PROF:
+This is what I can manage, nu pot urmari state of the art, e prea ambitios si irealist
+Voi folosi diferite metode pt clustering pe prototypes si voi masura performanta pe self re-enactment comparand contururi + subiectivitate
+OTherwise schimb tema la anul :)

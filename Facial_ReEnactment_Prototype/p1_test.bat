@@ -1,0 +1,1 @@
+python prototype.py --source="source.mp4" --target="stef.mp4" --output="r2s2.mp4" --srcscale 0.5 --trgscale 1

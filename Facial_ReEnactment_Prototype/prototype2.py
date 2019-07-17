@@ -8,11 +8,13 @@ import time
 import dlib
 import argparse
 
+from expression_prototypes import get_expression_prototypes
 from profiling import PerformanceTimer
 from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles, apply_transform
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
 from visualisation import view_landmarks, debug_fill_triangles
 from utils import *
+
 
 parser = argparse.ArgumentParser(description='Facial re-enactment prototype from source to target clip')
 parser.add_argument("--source", metavar="/path/to/source.mp4", help="path to source video clip")
@@ -48,11 +50,6 @@ source = cv2.VideoCapture(sourceName)
 target = cv2.VideoCapture(targetName)
 output = None
 
-
-
-#sourceVc = cv2.VideoCapture.open(sourceName)
-#targetVc = cv2.VideoCapture.open(targetName)
-
 sourceSuccess = True
 targetSuccess = True
 frameTime = 1/24
@@ -62,14 +59,7 @@ landmark_predictor = dlib.shape_predictor(predictor_data)
 
 fig = plt.figure()
 
-
-
-#source frame
-#srcWindow = fig.add_subplot(231)
-#target frame
-#trgWindow = fig.add_subplot(232)
-#result frame
-#resWindow = fig.add_subplot(233)
+#some offline processing before rendering
 
 
 #source frame
@@ -79,20 +69,21 @@ trgWindow = fig.add_subplot(132)
 #result frame
 resWindow = fig.add_subplot(133)
 
-#source local face space
-#src_face_space_window = fig.add_subplot(234)
-#target local face space
-#trg_face_space_window = fig.add_subplot(235)
+#get landmark faces in source video using some sort of disimilarity measure
+
+#average sum euclidean distance?
+#some others - compare performance?
+
+#performance measure - self re-enacntment contour comparison makes most sense 
 
 srcScalingFactor = args.srcscale
 trgScalingFactor = args.trgscale
-#scalingFactor = 0.25
+
 sourceSuccess, sourceFrame = get_scaled_rgb_frame(source, srcScalingFactor)
 targetSuccess, targetFrame = get_scaled_rgb_frame(target, trgScalingFactor)
 im_h,im_w = sourceFrame.shape[:2]
 trg_h, trg_w = targetFrame.shape[:2]
 
-#scalingFactor = 0.12
 srcPlot = srcWindow.imshow(sourceFrame)
 trgPlot = trgWindow.imshow(targetFrame)
 resPlot = resWindow.imshow(targetFrame)
@@ -100,11 +91,44 @@ plt.ion()
 plt.show()
 
 
+
+
+
+
+
+target_prototype_matching_faces = []
+
+
+source_prototype_faces, source_frame_prototype_index = get_expression_prototypes(source, srcScalingFactor, profiler)
+
+
 frameCount = 1
 srcLandmarkTrianglesIndices = []
+
+
+#go through target video and identify key face frames that  matched source video prototypes
+#use similarity measure to also point which reference face should be matched durring time measures
+#thing video compression
+#[F1,F1,F1,F1...F3,F3,F3,F3,....F1,F1,F1,F1....F2,F2,F2,F2 etc]
+
+
+
+
+
+
+
+
+#exit early for now as still testing
+exit()
+
+#go 
+
 while targetSuccess and sourceSuccess:
  
     print("Processing frame {} ...".format(frameCount))
+
+
+
     frameCount = frameCount + 1
     profiler.tick("Process Frame")
     #get frames
@@ -125,29 +149,10 @@ while targetSuccess and sourceSuccess:
     #TODO extract face region more rarely, maybe even half the rate of landmark prediction
     srcBB, srcLandmarks = get_face_bb_landmarks(sourceFrame, face_detector, landmark_predictor)
     trgBB, trgLandmarks = get_face_bb_landmarks(targetFrame, face_detector, landmark_predictor)
-    
-    # sourceAxes = np.float32([(srcLandmarks[FACE_AXIS_TOP_INDEX][0], srcLandmarks[FACE_AXIS_TOP_INDEX][1]), 
-    #                         (srcLandmarks[FACE_AXIS_RIGHT_INDEX][0],srcLandmarks[FACE_AXIS_RIGHT_INDEX][1]),  
-                            
-    #                         (srcLandmarks[FACE_AXIS_LEFT_INDEX][0],srcLandmarks[FACE_AXIS_LEFT_INDEX][1])
-    #                         ])
-    # targetAxes = np.float32([(trgLandmarks[FACE_AXIS_TOP_INDEX][0], trgLandmarks[FACE_AXIS_TOP_INDEX][1]), 
-    #                         (trgLandmarks[FACE_AXIS_RIGHT_INDEX][0],trgLandmarks[FACE_AXIS_RIGHT_INDEX][1]),  
-                         
-    #                         (trgLandmarks[FACE_AXIS_LEFT_INDEX][0],trgLandmarks[FACE_AXIS_LEFT_INDEX][1])
-    #                         ])
-
-    # target_to_source_T = cv2.getAffineTransform(targetAxes, sourceAxes)
-    # source_to_target_T = cv2.getAffineTransform(sourceAxes, targetAxes)
-
-    #for now just transform everything in source space, to see difference
-    #targetFrame =  cv2.warpAffine(targetFrame, target_to_source_T, (im_w, im_h), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-
-    #TODO go from target to source, perform calculations, but go back to target space when getting pixel data
-    #trgLandmarks = apply_transform(trgLandmarks, target_to_source_T)
 
     profiler.tock()
     if srcBB is None or trgBB is None:
+        print("No face in frame!")
         continue
     
     #draw frames, bounding box and landmarks

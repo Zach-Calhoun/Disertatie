@@ -4,11 +4,17 @@
 -- establish unique faces in source
 -- search for matches in target
 
+
+-- transform points relatively instead of absolutely
+
+
 -- use that for re-enactment
 
 -- figure what to do with mouth and closed eyes
 
--- what do with lightning changes
+-- what do with lightning changes -- solved -- poison cloning
+
+-- effects needs to be localized per feature and blended and scaled to prevent horrible deformations
 
 --EMAIL PROF:
 This is what I can manage, nu pot urmari state of the art, e prea ambitios si irealist

@@ -63,11 +63,13 @@ fig = plt.figure()
 
 
 #source frame
-srcWindow = fig.add_subplot(131)
+srcWindow = fig.add_subplot(141)
 #target frame
-trgWindow = fig.add_subplot(132)
+trgWindow = fig.add_subplot(142)
+#target prototype
+protoWindow = fig.add_subplot(143)
 #result frame
-resWindow = fig.add_subplot(133)
+resWindow = fig.add_subplot(144)
 
 #get landmark faces in source video using some sort of disimilarity measure
 
@@ -111,18 +113,17 @@ target_prototype_frames = get_matching_expression_prototypes(target, trgScalingF
 frameCount = 1
 srcLandmarkTrianglesIndices = []
 
-#exit early for now as still testing
-exit()
-
 #go 
+
+#reopen clips to reset capture
+source = cv2.VideoCapture(sourceName)
+target = cv2.VideoCapture(targetName)
 
 while targetSuccess and sourceSuccess:
  
     print("Processing frame {} ...".format(frameCount))
-
-
-
     frameCount = frameCount + 1
+
     profiler.tick("Process Frame")
     #get frames
     sourceSuccess, sourceFrame = get_scaled_rgb_frame(source, srcScalingFactor)
@@ -138,13 +139,21 @@ while targetSuccess and sourceSuccess:
     if args.output and output is None:
         output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), 20.0, (trg_w, trg_h))
 
+    #use the matching face from the target as baseline for transforming
+    #based on precomputed prototype matching
+    #calculated in previous steps
+    target_prototype = target_prototype_frames[source_frame_prototype_index[frameCount]]
+    protoWindow.imshow(target_prototype)
+
     #this is very slow, google says face detection is slow compared to landmark extraction
     #TODO extract face region more rarely, maybe even half the rate of landmark prediction
     srcBB, srcLandmarks = get_face_bb_landmarks(sourceFrame, face_detector, landmark_predictor)
     trgBB, trgLandmarks = get_face_bb_landmarks(targetFrame, face_detector, landmark_predictor)
+    protoBB, protoLandmarks = get_face_bb_landmarks(target_prototype, face_detector, landmark_predictor)
+    
 
     profiler.tock()
-    if srcBB is None or trgBB is None:
+    if srcBB is None or trgBB is None or protoBB is None:
         print("No face in frame!")
         continue
     
@@ -173,16 +182,22 @@ while targetSuccess and sourceSuccess:
 
     trgTriangles = landmark_indices_to_triangles(trgLandmarks, srcLandmarkTrianglesIndices)
 
+    protoTriangles = landmark_indices_to_triangles(protoLandmarks, srcLandmarkTrianglesIndices)
+
     #todo account for face perspective rotation
     #obtain landmark data in face space
-    source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks )
-    target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks )
+    source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks)
+    target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks)
 
-    source_to_target_landmarks = trgLandmarks[0:16] + landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale, trgWindow)[16:]
+    proto_face_center, proto_x_scale, proto_y_scale, proto_rot, proto_local_landmarks = get_face_coordinates_system(protoLandmarks)
+
+    transformed_source_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale, trgWindow)
+    #do not move arround nose or face edges
+    source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks[17:27] + trgLandmarks[27:36] + transformed_source_landmarks[36:]
+    #source_to_target_landmarks = trgLandmarks[0:17] + list(map(lambda x : np.add(x[0],x[1]),zip(trgLandmarks[17:],src_landmark_deltas[17:])))
     #generate local triangle data in face space using previous triangulation and new local landmarks
     # source_local_triangles = landmark_indices_to_triangles(source_local_landmarks, srcLandmarkTrianglesIndices)
     source_to_target_triangles = landmark_indices_to_triangles(source_to_target_landmarks, srcLandmarkTrianglesIndices)
-
     
     #move source local triangles to target local space and calculate from there
     if DEBUG_TRIANGLES and generated_colors == False:
@@ -193,7 +208,9 @@ while targetSuccess and sourceSuccess:
         
     profiler.tock()
 
-    
+    #TODO
+    #transform from source to prototype
+    #transform from transformed prototype  to target
     
     view_landmarks(srcLandmarks, trgLandmarks, srcWindow, trgWindow)
     if(DEBUG_TRIANGLES):
@@ -209,11 +226,12 @@ while targetSuccess and sourceSuccess:
     #srcLocalTris = []
     #trgLocalTris = []
     resFrame = None
-    if args.blank:
-        resFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
-    else:
-        resFrame = np.copy(targetFrame)
-    
+    # if args.blank:
+    #     resFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
+    # else:
+    #     resFrame = np.copy(targetFrame)
+    resFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
+
     for i, transform in enumerate(transforms):
         #skip while debugging triangles
         if(DEBUG_TRIANGLES):
@@ -245,16 +263,29 @@ while targetSuccess and sourceSuccess:
         resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
         resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
         #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        
+        cloneMask = np.zeros(targetFrame.shape, targetFrame.dtype)
+        #cloneMask = cloneMask.fill(255)
+        cloneContour = cv2.convexHull(np.int32(transformed_source_landmarks))
+        #mskBB = cv2.boundingRect(cloneContour)
+        #cloneMask[mskBB[1]:mskBB[1]+mskBB[3], mskBB[0]:mskBB[0]+mskBB[2]] = (255,255,255)
+        #targetFrame = cv2.fillConvexPoly(targetFrame, cloneContour, (0,0,0))
+        cloneMask = cv2.fillConvexPoly(cloneMask, cloneContour, (255,255,255))
+        cloneMask = cv2.erode(cloneMask, np.ones((5,5)))
+        #finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.MIXED_CLONE)
+        finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
+        #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        
         if args.slow:
-            resPlot.set_data(resFrame)
+            resPlot.set_data(finalFrame)
             plt.pause(frameTime)
         # resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] * ((1.0,1.0,1.0) - mask)
         # resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] = resFrame[trgBB[1]:trgBB[1]+trgBB[3], trgBB[0]:trgBB[0]+trgBB[2]] + trgCrop
     #convert in a neutral scale invariant space
-    resPlot.set_data(resFrame)
+    resPlot.set_data(finalFrame)
     #move stuff arround
     if output:
-        output.write(np.uint8(cv2.cvtColor(resFrame, cv2.COLOR_RGB2BGR)))
+        output.write(np.uint8(cv2.cvtColor(finalFrame, cv2.COLOR_RGB2BGR)))
 
     profiler.tock()
     #clear patches

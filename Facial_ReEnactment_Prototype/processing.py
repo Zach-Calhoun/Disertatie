@@ -72,11 +72,11 @@ def get_transforms(sourceTriangles, targetTriangles):
 
 def get_face_coordinates_system(landmarks, preview_window = None):
     """returns face center, xscale, yscale, rotationmatrix and landmarks in that coordinate system"""
-    leftAcc = np.array([0,0])
+    leftAcc = np.array([0,0],dtype=np.float64)
     for i in LEFT_EYE_INDICES:
         leftAcc += landmarks[i]
     
-    rightAcc = np.array([0,0])
+    rightAcc = np.array([0,0], dtype=np.float64)
     for i in RIGHT_EYE_INDICES:
         rightAcc += landmarks[i]
     #calculate eyes cog

@@ -2,11 +2,15 @@ import dlib
 predictor_data = 'shape_predictor_68_face_landmarks.dat'
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, get_face_coordinates_system
 from measures import sum_squared_euclideean_distances as ssed
+import cv2;
 
-DISIMILARITY_TRESHHOLD = 0.1
+DISIMILARITY_TRESHHOLD = 0.2
+#MAX_PROTO = 9999999999999999
+MAX_PROTO = 2
 #TODO think about paralizing parts of these
 
 def get_expression_prototypes(source, srcScalingFactor,profiler=None):
+    
     source_prototype_faces = []
     source_frame_prototype_index = []
 
@@ -19,6 +23,8 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
     sourceSuccess, sourceFrame = get_scaled_rgb_frame(source, srcScalingFactor)
     frameCount = 0
     while sourceSuccess:
+        if(len(source_prototype_faces) >= MAX_PROTO):
+            break
         print("Processing source frame {} ...".format(frameCount))
         frameCount = frameCount + 1
         profiler.tick("Process Frame")
@@ -40,6 +46,8 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
         if(frameCount == 1):
             source_prototype_faces += [source_local_landmarks]
             source_frame_prototype_index += [0]
+            src_proto_path = 'debug\\source_proto_{}.jpeg'.format(frameCount)
+            cv2.imwrite(src_proto_path, cv2.cvtColor(sourceFrame, cv2.COLOR_RGB2BGR))
             continue
 
         #if disimilarity measure is > treshhold, we asume it's the same reference face
@@ -58,6 +66,8 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
                 print('Found new prototype')
                 source_prototype_faces += [source_local_landmarks]
                 source_frame_prototype_index += [p_index]
+                src_proto_path = 'debug\\source_proto_{}.jpeg'.format(frameCount)
+                cv2.imwrite(src_proto_path, cv2.cvtColor(sourceFrame, cv2.COLOR_RGB2BGR))
                 break
         else:
             print('Not unique enough, closest prototype is {}'.format(disimilarity_min_index))
@@ -77,7 +87,7 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
 
 
     #TODO should these be stored as touples?
-    target_prototype_faces_frames = {}
+    target_prototype_faces_frames_landmarks = {}
     minimum_disimilarity = {}
 
     face_detector = dlib.get_frontal_face_detector()
@@ -89,6 +99,8 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
     targetSuccess, targetFrame = get_scaled_rgb_frame(target, trgScalingFactor)
     frameCount = 0
     while targetSuccess:
+        if(len(target_prototype_faces_frames_landmarks) >= MAX_PROTO):
+            break
         print("Processing source frame {} ...".format(frameCount))
         frameCount = frameCount + 1
         profiler.tick("Process Frame")
@@ -122,12 +134,16 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
                 if(disimilarity < minimum_disimilarity[p_index]):
                     print('Found better match for prototype {} at frame {}'.format(p_index, frameCount))
                     minimum_disimilarity[p_index] = disimilarity
-                    target_prototype_faces_frames[p_index] = targetFrame
+                    target_prototype_faces_frames_landmarks[p_index] = (targetFrame, trgLandmarks)
             #else take whatever
             else:
                 minimum_disimilarity[p_index] = disimilarity
-                target_prototype_faces_frames[p_index] = targetFrame
+                target_prototype_faces_frames_landmarks[p_index] = (targetFrame, trgLandmarks)
 
     print("Finished processing target video,")
+    for i in range(0, len(target_prototype_faces_frames_landmarks)):
+        frame = target_prototype_faces_frames_landmarks[i][0]
+        src_proto_path = 'debug\\source_proto_{}.jpeg'.format(i)
+        cv2.imwrite(src_proto_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         
-    return target_prototype_faces_frames
+    return target_prototype_faces_frames_landmarks

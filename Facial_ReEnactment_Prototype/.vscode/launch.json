@@ -8,9 +8,9 @@
             "name": "Python: Current File (Integrated Terminal)",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "E:\\Facultate\\Disertatie\\Facial_ReEnactment_Prototype\\prototype2.py",
             "console": "integratedTerminal",
-            "args": ["--source","source.mp4","--target","target.mp4","--output","test.mp4"]
+            "args": ["--source","source_cut.mp4","--target","stef.mp4","--output","p2r2s2.mp4","--srcscale","0.25","--trgscale","0.5"]
         },
         {
             "name": "Python: Remote Attach",

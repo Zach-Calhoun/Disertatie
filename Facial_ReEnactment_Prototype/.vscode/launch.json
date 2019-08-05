@@ -10,7 +10,9 @@
             "request": "launch",
             "program": "E:\\Facultate\\Disertatie\\Facial_ReEnactment_Prototype\\prototype2.py",
             "console": "integratedTerminal",
-            "args": ["--source","source_cut.mp4","--target","stef.mp4","--output","p2r2s2.mp4","--srcscale","0.25","--trgscale","0.5"]
+            //"args": ["--source","source_cut.mp4","--target","stef.mp4","--output","p2r2s2.mp4","--srcscale","0.5","--trgscale","1"]
+            //"args": ["--source","source_cut.mp4","--target","target.mp4","--output","p2s2t.mp4","--srcscale","0.5","--trgscale","0.5"]
+            "args": ["--source","source.mp4","--target","source.mp4","--output","p2s2s2.mp4","--srcscale","0.5","--trgscale","0.5"]
         },
         {
             "name": "Python: Remote Attach",

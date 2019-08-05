@@ -105,9 +105,9 @@ def get_face_coordinates_system(landmarks, preview_window = None):
     vertical_axis_len = np.linalg.norm(face_top - face_bottom)
     horizontal_axis_len = np.linalg.norm(face_left - face_right)
     #this is a wrong assumption
-    #face_center = np.array((horizontal_axis_c[0], vertical_axis_c[1]))
+    face_center = np.array((horizontal_axis_c[0], vertical_axis_c[1]))
     #face_center = np.average(landmarks, axis=0)
-    face_center = np.average(rotatedLandmarks, axis=0)
+    #face_center = np.average(rotatedLandmarks, axis=0)
     #calculate landmark positions based on center
     localLandmarks = []
     for rl in rotatedLandmarks:

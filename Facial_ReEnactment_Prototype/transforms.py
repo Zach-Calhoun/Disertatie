@@ -24,7 +24,7 @@ def triangles_to_verts(triangles):
     format that is usable by matplotlib polygon drawing"""
     triangle_list = []
     for i in range(0, len(triangles)):
-        verts = np.zeros((3,2))
+        verts = np.zeros((3,2),dtype=np.int32)
         verts[0,:] = (triangles[i][1], triangles[i][0])
         verts[1,:] = (triangles[i][3], triangles[i][2])
         verts[2,:] = (triangles[i][5], triangles[i][4])
@@ -52,7 +52,8 @@ def verts_to_indices(vertices, landmark_list):
             v1pos = landmarks.index((v1[0],v1[1]))
             v2pos = landmarks.index((v2[0],v2[1]))
             v3pos = landmarks.index((v3[0],v3[1]))
-        except:
+        except Exception as e:
+            #print(e)
             continue
         indices.append((v1pos,v2pos,v3pos))
         validTriangles.append(triangle_verts)

@@ -23,6 +23,12 @@ landmark_predictor = dlib.shape_predictor(predictor_data)
 colors = []
 frameTime = 1/24
 
+
+fig = plt.figure()
+src_m_win = fig.add_subplot(131)
+trg_m_win = fig.add_subplot(132)
+trg_m2s_win = fig.add_subplot(133)
+
 def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=PerformanceTimer()):
 
     #convert to gray for detection
@@ -115,58 +121,99 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
         resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
         #resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
         
-        cloneMask = np.zeros(targetFrame.shape, targetFrame.dtype)
-        #cloneMask = cloneMask.fill(255)
-        cloneContour = cv2.convexHull(np.int32(transformed_source_landmarks))
-        #mskBB = cv2.boundingRect(cloneContour)
-        #cloneMask[mskBB[1]:mskBB[1]+mskBB[3], mskBB[0]:mskBB[0]+mskBB[2]] = (255,255,255)
-        #targetFrame = cv2.fillConvexPoly(targetFrame, cloneContour, (0,0,0))
-        cloneMask = cv2.fillConvexPoly(cloneMask, cloneContour, (255,255,255))
-        cloneMask = cv2.erode(cloneMask, np.ones((5,5)))
-        #finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.MIXED_CLONE)
-        finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
-
-    #clone inner mouth from source to target
+    #clone inner mouth form source to target
     source_inner_mouth_landmarks = srcLandmarks[INNER_MOUTH_BEGIN:INNER_MOUTH_END+1]
     target_inner_mouth_landmarks = source_to_target_landmarks[INNER_MOUTH_BEGIN:INNER_MOUTH_END+1]
-
 
     src_mouth_center = np.average(source_inner_mouth_landmarks, axis=0)
     trg_mouth_center = np.average(target_inner_mouth_landmarks, axis=0)
     src_mouth_bb = cv2.boundingRect(np.array(source_inner_mouth_landmarks, dtype=np.int32))
     trg_mouth_bb = cv2.boundingRect(np.array(target_inner_mouth_landmarks, dtype=np.int32))
     local_inner_target_mouth = target_inner_mouth_landmarks - np.array((trg_mouth_bb[0], trg_mouth_bb[1]))
+    local_inner_target_mouth = list(map(lambda  x : tuple(x) ,local_inner_target_mouth))
     local_inner_source_mouth = source_inner_mouth_landmarks - np.array((src_mouth_bb[0], src_mouth_bb[1]))
+    local_inner_source_mouth = list(map(lambda  x : tuple(x) ,local_inner_source_mouth))
+    src_inner_mouth_rect = sourceFrame[src_mouth_bb[1]:src_mouth_bb[1]+src_mouth_bb[3], src_mouth_bb[0]:src_mouth_bb[0]+src_mouth_bb[2]]
+    #transform source mouth to match size of target transformed mouth - to account for different scaling as naive cloning has scaling issues
+    target_inner_mouth_temp_area = np.zeros((trg_mouth_bb[3],trg_mouth_bb[2],3),dtype=np.uint8)
+    source_inner_mouth_to_target_size = transfer_poly(target_inner_mouth_temp_area, src_inner_mouth_rect, local_inner_target_mouth, local_inner_source_mouth)
+
+    #src_m_win.imshow(src_inner_mouth_rect)
+    #trg_m_win.imshow(source_inner_mouth_to_target_size)
+
+    inner_mouth_mask = np.zeros(source_inner_mouth_to_target_size.shape, dtype=np.uint8)
+
+    inner_mouth_mask = cv2.fillConvexPoly(inner_mouth_mask, np.array(local_inner_target_mouth,dtype=np.int32), (255,255,255))
+    #finalFrame = cv2.fillConvexPoly(finalFrame, np.array(target_inner_mouth_landmarks, dtype=np.int32), (64,64,64))
+    #innerMouthMask[:,:] = (255,255,255)
+    #clear inner mouth for transfer
+    resFrame = cv2.fillConvexPoly(resFrame, np.array(target_inner_mouth_landmarks, dtype=np.int32), (0,0,0))
+    resFrame[trg_mouth_bb[1]:trg_mouth_bb[1]+trg_mouth_bb[3], trg_mouth_bb[0]:trg_mouth_bb[0]+trg_mouth_bb[2]] = resFrame[trg_mouth_bb[1]:trg_mouth_bb[1]+trg_mouth_bb[3], trg_mouth_bb[0]:trg_mouth_bb[0]+trg_mouth_bb[2]] + source_inner_mouth_to_target_size * inner_mouth_mask
+    
+    #blend mouth from source to target
+    source_mouth_landmarks = srcLandmarks[MOUTH_BEGIN:MOUTH_END+1]
+    target_mouth_landmarks = source_to_target_landmarks[MOUTH_BEGIN:MOUTH_END+1]
+
+    src_mouth_center = np.average(source_mouth_landmarks, axis=0)
+    trg_mouth_center = np.average(target_mouth_landmarks, axis=0)
+    src_mouth_bb = cv2.boundingRect(np.array(source_mouth_landmarks, dtype=np.int32))
+    trg_mouth_bb = cv2.boundingRect(np.array(target_mouth_landmarks, dtype=np.int32))
+    local_target_mouth = target_mouth_landmarks - np.array((trg_mouth_bb[0], trg_mouth_bb[1]))
+    local_target_mouth = list(map(lambda  x : tuple(x) ,local_target_mouth))
+    local_source_mouth = source_mouth_landmarks - np.array((src_mouth_bb[0], src_mouth_bb[1]))
+    local_source_mouth = list(map(lambda  x : tuple(x) ,local_source_mouth))
     src_mouth_rect = sourceFrame[src_mouth_bb[1]:src_mouth_bb[1]+src_mouth_bb[3], src_mouth_bb[0]:src_mouth_bb[0]+src_mouth_bb[2]]
     #transform source mouth to match size of target transformed mouth - to account for different scaling as naive cloning has scaling issues
-    target_mouth_temp_area = np.zeros((trg_mouth_bb[1],trg_mouth_bb[0],3),dtype=np.uint8)
-    source_mouth_to_target_size = transfer_poly(src_mouth_rect, target_mouth_temp_area, local_inner_source_mouth.tolist(), local_inner_target_mouth.tolist())
+    target_mouth_temp_area = np.zeros((trg_mouth_bb[3],trg_mouth_bb[2],3),dtype=np.uint8)
+    source_mouth_to_target_size = transfer_poly(target_mouth_temp_area, src_mouth_rect, local_target_mouth, local_source_mouth)
 
    
-    innerMouthMask = np.zeros(src_mouth_rect.shape, dtype=np.uint8)
+    src_m_win.imshow(src_mouth_rect)
+    trg_m_win.imshow(source_mouth_to_target_size)
 
-    #innerMouthMask = cv2.fillConvexPoly(innerMouthMask, np.array(local_inner_target_mouth,dtype=np.int32), (255,255,255))
-    innerMouthMask[:,:] = (255,255,255)
+    mouth_mask = np.zeros(source_mouth_to_target_size.shape, dtype=np.uint8)
+
+    mouth_mask = cv2.fillConvexPoly(mouth_mask, np.array(local_target_mouth,dtype=np.int32), (255,255,255))
+    #finalFrame = cv2.fillConvexPoly(finalFrame, np.array(target_inner_mouth_landmarks, dtype=np.int32), (64,64,64))
+    #innerMouthMask[:,:] = (255,255,255)
     try:
         #THERE IS AN ISSUE HERE WHEN THE SCALING DOESN'T MATCH, SO FIRST SRC needs to be mapped to TARGET
-        finalFrame = cv2.seamlessClone(source_mouth_to_target_size, finalFrame, innerMouthMask, (int(trg_mouth_center[0]),int(trg_mouth_center[1])), cv2.MIXED_CLONE)
+        res_frame_with_mouth = cv2.seamlessClone(source_mouth_to_target_size, resFrame, mouth_mask, (int(trg_mouth_center[0]),int(trg_mouth_center[1])), cv2.NORMAL_CLONE)
     except Exception as e:
         print("EXCEPTION ON FRAME")
         print(e)
         return None, None, None, None
     
+    cloneMask = np.zeros(targetFrame.shape, targetFrame.dtype)
+    #cloneMask = cloneMask.fill(255)
+    cloneContour = cv2.convexHull(np.int32(transformed_source_landmarks))
+    #mskBB = cv2.boundingRect(cloneContour)
+    #cloneMask[mskBB[1]:mskBB[1]+mskBB[3], mskBB[0]:mskBB[0]+mskBB[2]] = (255,255,255)
+    #targetFrame = cv2.fillConvexPoly(targetFrame, cloneContour, (0,0,0))
+    cloneMask = cv2.fillConvexPoly(cloneMask, cloneContour, (255,255,255))
+    cloneMask = cv2.erode(cloneMask, np.ones((5,5)))
+    #finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.MIXED_CLONE)
+    
+    #finalFrame = resFrame
+    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1]-25)),cv2.NORMAL_CLONE)
+
+
+
+
+
     profiler.tock()
     return finalFrame, source_to_target_landmarks, srcLandmarkTrianglesIndices, srcLandmarks
         
 def transfer_poly(source, target, sourcePoints, targetPoints, triangle_indices=None):
     height, width = source.shape[:2]
     if(triangle_indices is None):
-        source_triangles = triangulate_landmarks(sourcePoints, height, width)
-        triangle_indices, source_triangles = verts_to_indices(source_triangles, sourcePoints)
+        target_triangles = triangulate_landmarks(targetPoints, height, width)
+        triangle_indices, target_triangles = verts_to_indices(target_triangles, targetPoints)
 
-    target_triangles = landmark_indices_to_triangles(targetPoints, triangle_indices)
+    source_triangles = landmark_indices_to_triangles(sourcePoints, triangle_indices)
     
     transforms = get_transforms(source_triangles, target_triangles)
+    #transforms = get_transforms(target_triangles, source_triangles)
 
     resFrame = None
     resFrame = np.zeros((height, width,3), dtype=np.uint8)
@@ -185,7 +232,7 @@ def transfer_poly(source, target, sourcePoints, targetPoints, triangle_indices=N
             srcLocalTris.append(srcLocalTriangle)
             trgLocalTris.append(trgLocalTriangle)
 
-        srcCrop = source[trgBB[1] : trgBB[1] + trgBB[3], trgBB[0] : trgBB[0] + trgBB[2]]
+        srcCrop = target[trgBB[1] : trgBB[1] + trgBB[3], trgBB[0] : trgBB[0] + trgBB[2]]
 
         trgCrop = cv2.warpAffine(srcCrop, transformationMatrix, (srcBB[2], srcBB[3]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
 

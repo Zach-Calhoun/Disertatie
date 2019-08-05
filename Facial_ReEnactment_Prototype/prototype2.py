@@ -171,7 +171,11 @@ while targetSuccess and sourceSuccess:
     plt.pause(frameTime)
     for p in reversed(srcWindow.patches):
         p.remove()
-    for p in reversed(trgWindow.patches):
+    for p in reversed(srcWindow.patches):
+        p.remove()
+    for p in reversed(protoWindow.patches):
+        p.remove()
+    for p in reversed(transformedProtoWindow.patches):
         p.remove()
 
 source.release()

@@ -70,6 +70,8 @@ def get_transforms(sourceTriangles, targetTriangles):
         transforms.append((M, srcBB, localSrcPts, trgBB, localTrgPts))
     return transforms
 
+
+#this will likely become redundant
 def get_face_coordinates_system(landmarks, preview_window = None):
     """returns face center, xscale, yscale, rotationmatrix and landmarks in that coordinate system"""
     leftAcc = np.array([0,0],dtype=np.float64)

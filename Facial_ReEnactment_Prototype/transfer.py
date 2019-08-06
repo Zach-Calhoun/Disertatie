@@ -13,6 +13,7 @@ from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, l
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
 from visualisation import view_landmarks, debug_fill_triangles
 from utils import *
+from headpose import headpose_estimate
 
 generated_colors = False
 generated_triangulation = False
@@ -46,6 +47,14 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
         print("No face in frame!")
         return None, None, None, None
     
+
+    source_translation, source_rotation, source_t_matrix = headpose_estimate(sourceFrame, srcLandmarks)
+    target_translation, target_rotation, target_t_matrix = headpose_estimate(targetFrame, trgLandmarks)
+    # assumption can be made that applying the inverse of source_t_matrix to the source landmarks 
+    # followed by the target_t_matrix should solve the overlaying of target landmarks to source landmarks
+    # the edge case of extreme rotations is not treated
+    # care should be taken as landmarks are currently 2D, but assuming 0 depth axis should wokr
+
     #x,y,w,h = dlib_rect_to_bb(srcBB)
 
     #triangulate
@@ -195,7 +204,7 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
     #finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.MIXED_CLONE)
     
     #finalFrame = resFrame
-    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1]-25)),cv2.NORMAL_CLONE)
+    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
 
 
 
@@ -233,14 +242,16 @@ def transfer_poly(source, target, sourcePoints, targetPoints, triangle_indices=N
             trgLocalTris.append(trgLocalTriangle)
 
         srcCrop = target[trgBB[1] : trgBB[1] + trgBB[3], trgBB[0] : trgBB[0] + trgBB[2]]
-
-        trgCrop = cv2.warpAffine(srcCrop, transformationMatrix, (srcBB[2], srcBB[3]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-
-        mask = np.zeros((srcBB[3], srcBB[2], 3), dtype = np.float32)
+        #suddenly for some reeason, everynow and then the BB is out of bounds so we need to limit it
+        max_crop = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]]
+        trgCrop = cv2.warpAffine(srcCrop, transformationMatrix, (max_crop.shape[1], max_crop.shape[0]), None, flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+     
+     
+        mask = np.zeros(max_crop.shape, dtype = np.float32)
         cv2.fillConvexPoly(mask, np.int32(srcLocalTris),(1.0, 1.0, 1.0), 16, 0)
         trgCrop = trgCrop * mask
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = max_crop * ((1.0,1.0,1.0) - mask)
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = max_crop + mask * trgCrop
         
         #cloneMask = np.zeros(target.shape, target.dtype)
 

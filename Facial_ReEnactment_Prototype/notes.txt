@@ -1,22 +1,29 @@
 -- establish reference faces -- need expression analysis :(
--- use relative landmark movements instead of transfering them -> might improve results
+-- use relative landmark movements instead of transfering them -> might improve results - sctratcg that not feasible
 
--- establish unique faces in source
--- search for matches in target
-
-
--- transform points relatively instead of absolutely
+-- establish unique faces in source - done
+-- search for matches in target - done
 
 
--- use that for re-enactment
+-- transform points relatively instead of absolutely - see above, no go
 
--- figure what to do with mouth and closed eyes
+
+-- figure what to do with mouth and closed eyes - fixed by local poisson cloning
 
 -- what do with lightning changes -- solved -- poison cloning
 
--- effects needs to be localized per feature and blended and scaled to prevent horrible deformations
+-- effects needs to be localized per feature and blended and scaled to prevent horrible deformations - solution lower
 
---EMAIL PROF:
-This is what I can manage, nu pot urmari state of the art, e prea ambitios si irealist
-Voi folosi diferite metode pt clustering pe prototypes si voi masura performanta pe self re-enactment comparand contururi + subiectivitate
-OTherwise schimb tema la anul :)
+
+
+
+TODO:::::
+
+REFACTOR, need to add serios OOP as the mental load is already to much when returning from day to day
+Implement head pose estimator - should fix rotation issue, current system is insuficient
+Implement better scaling
+    IDEA: When mapping facial features from one head to another, certain points must remain static
+    For mouth use lips COM as simetry should be sufficient, but, account for matching edges of coresponding jaw landmarks for cases of side translatiion
+    Nose should match top and bottom points
+    For eyes and eyebrows, an assembly of eyse center should be used as pivots for moving around eyes & eyebrows as to solve distance issues
+

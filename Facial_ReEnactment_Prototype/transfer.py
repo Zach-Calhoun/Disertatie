@@ -13,7 +13,7 @@ from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, l
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
 from visualisation import view_landmarks, debug_fill_triangles
 from utils import *
-from headpose import headpose_estimate
+from headpose import headpose_estimate, project_back
 
 generated_colors = False
 generated_triangulation = False
@@ -48,13 +48,7 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
         return None, None, None, None
     
 
-    source_translation, source_rotation, source_t_matrix = headpose_estimate(sourceFrame, srcLandmarks)
-    target_translation, target_rotation, target_t_matrix = headpose_estimate(targetFrame, trgLandmarks)
-    # assumption can be made that applying the inverse of source_t_matrix to the source landmarks 
-    # followed by the target_t_matrix should solve the overlaying of target landmarks to source landmarks
-    # the edge case of extreme rotations is not treated
-    # care should be taken as landmarks are currently 2D, but assuming 0 depth axis should wokr
-
+  
     #x,y,w,h = dlib_rect_to_bb(srcBB)
 
     #triangulate
@@ -76,11 +70,49 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
 
     #todo account for face perspective rotation
     #obtain landmark data in face space
+
+    #TODO refactor out
+    #will become redundant soon
     source_face_center, source_x_scale, source_y_scale, source_rot, source_local_landmarks = get_face_coordinates_system(srcLandmarks)
     target_face_center, target_x_scale, target_y_scale, target_rot, target_local_landmarks = get_face_coordinates_system(trgLandmarks)
 
+    #TODO: Figure out why this transformations lead to bad coordinates
+    # while making a sandwich I had the revelation that I'm giving the coordinates in image space, while calculations are done arround camera space 
+    # need to center landmarks
+    #at the moment it seems to send all points way outside the image space
 
+    source_translation, source_rotation, source_cam_matrix ,source_t_matrix = headpose_estimate(sourceFrame, srcLandmarks)
+    target_translation, target_rotation, target_cam_matrix, target_t_matrix = headpose_estimate(targetFrame, trgLandmarks)
     transformed_source_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale, trgWindow)
+    source_inverse_t_matrix = np.linalg.inv(source_t_matrix)
+
+
+
+    # # assumption can be made that applying the inverse of source_t_matrix to the source landmarks 
+    # # followed by the target_t_matrix should solve the overlaying of target landmarks to source landmarks
+    # # the edge case of extreme rotations is not treated
+    # # care should be taken as landmarks are currently 2D, but assuming 0 depth axis should wokr
+
+    # #prepare source landmarks for 3D transformation
+    # # 0 for ignore z component, 1 for indicating this is a position to comply to 4x4 * 4 vector multiplication
+    # to3d = lambda x : (x[0],x[1],0, 1)
+    # src_3d_landmarks = map(to3d,srcLandmarks)
+    # src_3d_landmarks = np.array(list(src_3d_landmarks), dtype=np.float64)
+
+    # #likeley will need to project back to 2D 
+
+
+    # #transformed_source_landmarks = cv2.transform(cv2.transform(src_3d_landmarks ,source_inverse_t_matrix), target_t_matrix)
+    # # no need to transform twice as project back will handle going from local space 3d to camera space 2D
+    # #transformed_source_landmarks = cv2.transform(src_3d_landmarks ,source_inverse_t_matrix)
+    # #this fails because openCV is silly and it's assertion messages are silly
+
+    # #this seems to work
+    # transformed_source_landmarks = np.matmul(src_3d_landmarks, source_inverse_t_matrix)
+    # #demote from 4d to 3d
+    # transformed_source_landmarks = transformed_source_landmarks[:,:3]
+    # transformed_source_landmarks, _ = project_back(transformed_source_landmarks, target_rotation, target_translation, target_cam_matrix)
+   
     #do not move arround nose or face edges
     source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks[17:27] + trgLandmarks[27:36] + transformed_source_landmarks[36:]
 
@@ -193,6 +225,9 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
         print(e)
         return None, None, None, None
     
+    #res_frame_with_mouth = resFrame
+    ### Map face to target
+
     cloneMask = np.zeros(targetFrame.shape, targetFrame.dtype)
     #cloneMask = cloneMask.fill(255)
     cloneContour = cv2.convexHull(np.int32(transformed_source_landmarks))
@@ -204,7 +239,10 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, profiler=Performanc
     #finalFrame = cv2.seamlessClone(resFrame, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.MIXED_CLONE)
     
     #finalFrame = resFrame
-    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
+
+    #placeholder - cludge - subtract 25 from Y coordinate if using main axis as center of face
+    # do not if using CoM
+    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1]-25)),cv2.NORMAL_CLONE)
 
 
 
@@ -250,8 +288,8 @@ def transfer_poly(source, target, sourcePoints, targetPoints, triangle_indices=N
         mask = np.zeros(max_crop.shape, dtype = np.float32)
         cv2.fillConvexPoly(mask, np.int32(srcLocalTris),(1.0, 1.0, 1.0), 16, 0)
         trgCrop = trgCrop * mask
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = max_crop * ((1.0,1.0,1.0) - mask)
-        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = max_crop + mask * trgCrop
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] = resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] * ((1.0,1.0,1.0) - mask)
+        resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] =  resFrame[srcBB[1]:srcBB[1]+srcBB[3], srcBB[0]:srcBB[0]+srcBB[2]] + mask * trgCrop
         
         #cloneMask = np.zeros(target.shape, target.dtype)
 

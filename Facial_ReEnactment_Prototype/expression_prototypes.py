@@ -1,16 +1,18 @@
 import dlib
 predictor_data = 'shape_predictor_68_face_landmarks.dat'
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, get_face_coordinates_system
-from measures import sum_squared_euclideean_distances as ssed
+from measures import sum_squared_euclideean_distances as ssed, sum_euclideean_distances as sed
 import cv2;
 
 DISIMILARITY_TRESHHOLD = 0.2
 #MAX_PROTO = 9999999999999999
-MAX_PROTO = 2
+MAX_PROTO = 999
 #TODO think about paralizing parts of these
 
+measure = sed;
+
 def get_expression_prototypes(source, srcScalingFactor,profiler=None):
-    
+
     source_prototype_faces = []
     source_frame_prototype_index = []
 
@@ -56,19 +58,18 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
         disimilarity_min = 99999999999999999999999999999999999
         disimilarity_min_index = 0
         for p_index,prototype in enumerate(source_prototype_faces):
-            disimilarity = ssed(prototype, source_local_landmarks)
+            disimilarity = measure(prototype, source_local_landmarks)
             if(disimilarity < disimilarity_min):
                 disimilarity_min = disimilarity
                 disimilarity_min_index = p_index
             print('Calculated disimilarity between frame {} and prototype {}'.format(frameCount,p_index))
             print(disimilarity_min)
-            if(disimilarity_min >  DISIMILARITY_TRESHHOLD):
-                print('Found new prototype')
-                source_prototype_faces += [source_local_landmarks]
-                source_frame_prototype_index += [p_index]
-                src_proto_path = 'debug\\source_proto_{}.jpeg'.format(frameCount)
-                cv2.imwrite(src_proto_path, cv2.cvtColor(sourceFrame, cv2.COLOR_RGB2BGR))
-                break
+        if(disimilarity_min >  DISIMILARITY_TRESHHOLD):
+            print('Found new prototype')
+            source_prototype_faces += [source_local_landmarks] 
+            source_frame_prototype_index += [disimilarity_min_index]
+            src_proto_path = 'debug\\source_proto_{}.jpeg'.format(frameCount)
+            cv2.imwrite(src_proto_path, cv2.cvtColor(sourceFrame, cv2.COLOR_RGB2BGR))
         else:
             print('Not unique enough, closest prototype is {}'.format(disimilarity_min_index))
             source_frame_prototype_index += [disimilarity_min_index]
@@ -85,7 +86,6 @@ def get_expression_prototypes(source, srcScalingFactor,profiler=None):
 
 def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype_faces, profiler=None):
 
-
     #TODO should these be stored as touples?
     target_prototype_faces_frames_landmarks = {}
     minimum_disimilarity = {}
@@ -101,7 +101,7 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
     while targetSuccess:
         if(len(target_prototype_faces_frames_landmarks) >= MAX_PROTO):
             break
-        print("Processing source frame {} ...".format(frameCount))
+        print("Processing target frame {} ...".format(frameCount))
         frameCount = frameCount + 1
         profiler.tick("Process Frame")
         #get frames
@@ -124,10 +124,8 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
         #while also storing the similarity value, if next frames have better similarity we replace the old matching
         #frame per prototype
 
-        disimilarity_min = 99999999999999999999999999999999999
-        disimilarity_min_index = 0
         for p_index,prototype in enumerate(source_prototype_faces):
-            disimilarity = ssed(prototype, target_local_landmarks)
+            disimilarity = measure(prototype, target_local_landmarks)
             print('Calculated disimilarity between frame {} and prototype {}'.format(frameCount,p_index))
             #if we started storing matches
             if p_index in minimum_disimilarity:
@@ -137,13 +135,14 @@ def get_matching_expression_prototypes(target, trgScalingFactor,source_prototype
                     target_prototype_faces_frames_landmarks[p_index] = (targetFrame, trgLandmarks)
             #else take whatever
             else:
+                print('Take whatever')
                 minimum_disimilarity[p_index] = disimilarity
                 target_prototype_faces_frames_landmarks[p_index] = (targetFrame, trgLandmarks)
 
     print("Finished processing target video,")
     for i in range(0, len(target_prototype_faces_frames_landmarks)):
         frame = target_prototype_faces_frames_landmarks[i][0]
-        src_proto_path = 'debug\\source_proto_{}.jpeg'.format(i)
+        src_proto_path = 'debug\\target_proto_{}.jpeg'.format(i)
         cv2.imwrite(src_proto_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         
     return target_prototype_faces_frames_landmarks

@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 import time
 import dlib
 import argparse
+import os
 
 from expression_prototypes import get_expression_prototypes, get_matching_expression_prototypes
 from profiling import PerformanceTimer
 from transforms import dlib_rect_to_bb, landmarks_to_points, verts_to_indices, landmark_indices_to_triangles, apply_transform
 from processing import get_scaled_rgb_frame, get_face_bb_landmarks, triangulate_landmarks, get_transforms, get_face_coordinates_system, landmarks_to_image_space
 from visualisation import view_landmarks, debug_fill_triangles
-from transfer import transfer_expression, transfer_face
+from transfer import transfer_expression, transfer_face, transfer_poly
 from utils import *
 
 
@@ -107,16 +108,16 @@ plt.show()
 target_prototype_matching_faces = []
 
 
-#source_prototype_faces, source_frame_prototype_index = get_expression_prototypes(source, srcScalingFactor, profiler)
+source_prototype_faces, source_frame_prototype_index = get_expression_prototypes(source, srcScalingFactor, profiler)
 
 #go through target video and identify key face frames that  matched source video prototypes
 #use similarity measure to also point which reference face should be matched durring time measures
 
-#target_prototype_faces_frames_landmarks = get_matching_expression_prototypes(target, trgScalingFactor, source_prototype_faces, profiler)
+target_prototype_faces_frames_landmarks = get_matching_expression_prototypes(target, trgScalingFactor, source_prototype_faces, profiler)
 
 
 
-frameCount = 1
+frameCount = 0
 srcLandmarkTrianglesIndices = []
 
 #go 
@@ -124,6 +125,13 @@ srcLandmarkTrianglesIndices = []
 #reopen clips to reset capture
 source = cv2.VideoCapture(sourceName)
 target = cv2.VideoCapture(targetName)
+
+base_output_folder = 'debug\\{}'.format(outputName)
+if not os.path.exists(base_output_folder):
+    os.makedirs(base_output_folder, exist_ok=True)
+
+base_output_path = base_output_folder+'\\{}.jpeg'
+
 
 while targetSuccess and sourceSuccess:
  
@@ -137,49 +145,79 @@ while targetSuccess and sourceSuccess:
     if not sourceSuccess or not targetSuccess:
         break
 
-    #target_prototype,target_prototype_landmarks = target_prototype_faces_frames_landmarks[source_frame_prototype_index[frameCount]]
-    
+    try:
+        target_prototype,target_prototype_landmarks = target_prototype_faces_frames_landmarks[source_frame_prototype_index[frameCount-1]]
+    except:
+        target_prototype,target_prototype_landmarks = target_prototype_faces_frames_landmarks[source_frame_prototype_index[len(source_frame_prototype_index)-1]]
+
     srcPlot.set_data(sourceFrame)
     trgPlot.set_data(targetFrame)
-    #protoPlot.set_data(target_prototype)
+    protoPlot.set_data(target_prototype)
 
-    if args.output and output is None:
-        output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), 20.0, (trg_w, trg_h))
-    
-    #sourceToTarget, newTargetLandmarks, triangle_landmark_indices, source_frame_landmarks = transfer_expression(sourceFrame, targetFrame, trgWindow, profiler)
-    #sourceToProto, newProtoLandmarks, _ , _= transfer_expression(sourceFrame, target_prototype, protoWindow, profiler)
-    sourceToProto, newProtoLandmarks, _ , _= transfer_expression(sourceFrame, targetFrame, protoWindow, profiler)
-    #if(sourceToTarget is None or sourceToProto is None):
-        #continue
+   
 
-    if(sourceToProto is None):
+    sourceToTarget, newTargetLandmarks, triangle_landmark_indices, source_frame_landmarks, target_landmarks = transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler)
+    transformedTargetPlot.set_data(sourceToTarget)
+
+    sourceToProto, newProtoLandmarks, _ , _, _ = transfer_expression(sourceFrame, target_prototype, protoWindow, srcWindow, profiler)
+    transformedProtoPlot.set_data(sourceToProto)
+    #sourceToProto, newProtoLandmarks, _ , _= transfer_expression(sourceFrame, targetFrame, protoWindow, srcWindow, profiler)
+    if(sourceToTarget is None or sourceToProto is None):
         continue
 
-    #protoToSource = transfer_face(sourceFrame,  source_frame_landmarks ,sourceToProto, sourceToTarget, newProtoLandmarks, newTargetLandmarks, triangle_landmark_indices)
+    protoToSource = transfer_poly(sourceToTarget, sourceToProto, newTargetLandmarks, newProtoLandmarks)
+    #protoToSource = transfer_poly(sourceToProto,sourceToTarget, newProtoLandmarks, newTargetLandmarks)
 
+    cloneMask = np.zeros(protoToSource.shape, protoToSource.dtype)
+    cloneContour = cv2.convexHull(np.int32(target_landmarks))
+    cloneMask = cv2.fillConvexPoly(cloneMask, cloneContour, (255,255,255))
+    cloneMask = cv2.erode(cloneMask, np.ones((5,5)))
+    #finalFrame = cv2.seamlessClone(protoToSource, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.NORMAL_CLONE)
+    target_face_center, _, _, _, target_local_landmarks  = get_face_coordinates_system(target_landmarks);
+    finalFrame = cv2.seamlessClone(protoToSource, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
+
+   # finalFrame = protoToSource;
+    #protoToSource = transfer_face(sourceToProto, sourceToTarget, newProtoLandmarks, newTargetLandmarks, triangle_landmark_indices)
+    #protoToSource = transfer_face(sourceFrame,  source_frame_landmarks ,sourceToProto, sourceToTarget, triangle_landmark_indices)
     if args.slow:
         plt.pause(frameTime)
         
- 
-    #transformedTargetPlot.set_data(sourceToTarget)
-    transformedProtoPlot.set_data(sourceToProto)
-    #finalPlot.set_data(protoToSource)
+    finalPlot.set_data(finalFrame)
 
+    src_out_path = base_output_path.format('{}_src'.format(frameCount))
+    cv2.imwrite(src_out_path, cv2.cvtColor(sourceFrame, cv2.COLOR_RGB2BGR))
+    trg_out_path = base_output_path.format('{}_trg'.format(frameCount))
+    cv2.imwrite(trg_out_path, cv2.cvtColor(targetFrame, cv2.COLOR_RGB2BGR))
+    transformed_target_out_path = base_output_path.format('{}_src2trg'.format(frameCount))
+    cv2.imwrite(transformed_target_out_path, cv2.cvtColor(sourceToTarget, cv2.COLOR_RGB2BGR))
+    proto_out_path = base_output_path.format('{}_proto'.format(frameCount))
+    cv2.imwrite(proto_out_path, cv2.cvtColor(target_prototype, cv2.COLOR_RGB2BGR))
+    transformed_proto_out_path = base_output_path.format('{}_src2proto'.format(frameCount))
+    cv2.imwrite(transformed_proto_out_path, cv2.cvtColor(sourceToProto, cv2.COLOR_RGB2BGR))
+    final_out_path = base_output_path.format('{}_result'.format(frameCount))
+    cv2.imwrite(final_out_path, cv2.cvtColor(finalFrame, cv2.COLOR_RGB2BGR))
+
+    if args.output and output is None:
+        output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), 20.0, (finalFrame.shape[1], finalFrame.shape[0]))
     if output:
-        output.write(np.uint8(cv2.cvtColor(sourceToProto, cv2.COLOR_RGB2BGR)))
+        output.write(np.uint8(cv2.cvtColor(finalFrame, cv2.COLOR_RGB2BGR)))
+    print("Done one full frame process")
+    profiler.tock()
 
     plt.pause(frameTime)
     for p in reversed(srcWindow.patches):
         p.remove()
-    for p in reversed(srcWindow.patches):
+    for p in reversed(trgWindow.patches):
         p.remove()
     for p in reversed(protoWindow.patches):
         p.remove()
     for p in reversed(transformedProtoWindow.patches):
         p.remove()
 
+print('Transfer complete')
+output.release()
 source.release()
 target.release()
-output.release()
+
 
 

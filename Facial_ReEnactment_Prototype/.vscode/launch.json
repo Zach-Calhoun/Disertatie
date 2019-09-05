@@ -10,9 +10,16 @@
             "request": "launch",
             "program": "E:\\Facultate\\Disertatie\\Facial_ReEnactment_Prototype\\prototype2.py",
             "console": "integratedTerminal",
-            "args": ["--source","source_cut.mp4","--target","stef.mp4","--output","p2r2s2.mp4","--srcscale","0.5","--trgscale","1"]
+            //"args": ["--source","source_cut2.mp4","--target","stef.mp4","--output","p2r2s2.mp4","--srcscale","0.25","--trgscale","0.5"]
+            //"args": ["--source","source_cut2.mp4","--target","radu_short.mp4","--output","p2r2r2.mp4","--srcscale","0.25","--trgscale","0.25"]
+            //"args": ["--source","source_cut2.mp4","--target","target3.mp4","--output","radu2putin.mp4","--srcscale","0.5","--trgscale","0.5"]
             //"args": ["--source","source_cut.mp4","--target","target.mp4","--output","p2s2t.mp4","--srcscale","0.5","--trgscale","0.5"]
-            //"args": ["--source","source_cut2.mp4","--target","source_cut2.mp4","--output","p2s2s2.mp4","--srcscale","0.5","--trgscale","0.5"]
+           //"args": ["--source","source_cut2.mp4","--target","source_cut2.mp4","--output","p2s2s2.mp4","--srcscale","0.25","--trgscale","0.25"]
+           //"args": ["--source","source_cut2.mp4","--target","radu_new.mp4","--output","radu_old_new.mp4","--srcscale","0.25","--trgscale","0.25"]
+           //"args": ["--source","dis_demo.mp4","--target","source.mp4","--output","dis_demo2src2.mp4","--srcscale","0.25","--trgscale","0.25"]
+           "args": ["--source","dis_demo.mp4","--target","thies.mp4","--output","dis_demo2thies3D.mp4","--srcscale","0.25","--trgscale","0.25"]
+           //"args": ["--source","dis_demo.mp4","--target","trump.mp4","--output","dis_demo2trump.mp4","--srcscale","0.25","--trgscale","0.25"]
+           //"args": ["--source","dis_demo.mp4","--target","stef.mp4","--output","dis_demo2stef.mp4","--srcscale","0.25","--trgscale","0.25"]
         },
         {
             "name": "Python: Remote Attach",

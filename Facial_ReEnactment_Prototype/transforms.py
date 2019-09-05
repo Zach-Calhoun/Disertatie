@@ -49,9 +49,14 @@ def verts_to_indices(vertices, landmark_list):
         v3 = triangle_verts[2,:]
         try:
             #TODO see if this can be otpimised by prior sorting and using a binary search
-            v1pos = landmarks.index((v1[0],v1[1]))
-            v2pos = landmarks.index((v2[0],v2[1]))
-            v3pos = landmarks.index((v3[0],v3[1]))
+            if(type(landmarks[0]) is tuple):
+                v1pos = landmarks.index((v1[0],v1[1]))
+                v2pos = landmarks.index((v2[0],v2[1]))
+                v3pos = landmarks.index((v3[0],v3[1]))
+            else:
+                v1pos = landmarks.index([v1[0],v1[1]])
+                v2pos = landmarks.index([v2[0],v2[1]])
+                v3pos = landmarks.index([v3[0],v3[1]])
         except Exception as e:
             #print(e)
             continue

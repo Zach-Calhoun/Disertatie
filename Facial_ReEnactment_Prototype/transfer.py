@@ -35,7 +35,7 @@ projection_preview = fig.add_subplot(144)
 scatters = []
 scatters2 = []
 
-def transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler=PerformanceTimer()):
+def transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler=PerformanceTimer(), use3D=False):
     profiler.tick("Transfering expression")
     global scatters
     global scatters2
@@ -102,107 +102,38 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler
     # need to center landmarks
     # at the moment it seems to send all points way outside the image space
 
-    source_translation, source_rotation, source_cam_matrix, source_t_matrix, source_inverse_t_matrix = headpose_estimate(sourceFrame, srcLandmarks)
-    target_translation, target_rotation, target_cam_matrix, target_t_matrix, target_inverse_t_matrix = headpose_estimate(targetFrame, trgLandmarks)
+    if use3D:
+        source_translation, source_rotation, source_cam_matrix, source_t_matrix, source_inverse_t_matrix = headpose_estimate(sourceFrame, srcLandmarks)
+        target_translation, target_rotation, target_cam_matrix, target_t_matrix, target_inverse_t_matrix = headpose_estimate(targetFrame, trgLandmarks)
+
     transformed_source_landmarks = landmarks_to_image_space(source_local_landmarks, target_rot, target_face_center, target_x_scale, target_y_scale) #, trgWindow)
 
-    #this is a very wrong assumption :)
-    ####source_inverse_t_matrix = np.linalg.inv(source_t_matrix)
+    if use3D:
+        transformed_source_landmarks3 = match_to_model_face(srcLandmarks) 
 
-    # assumption can be made that applying the inverse of source_t_matrix to the source landmarks
-    # followed by the target_t_matrix should solve the overlaying of target landmarks to source landmarks
-    # the edge case of extreme rotations is not treated
-    # care should be taken as landmarks are currently 2D, but assuming 0 depth axis should wokr
+        scatters2 += [local_projection_preview.scatter(transformed_source_landmarks3[:, 0], transformed_source_landmarks3[:, 1], c='b')]
+        scatters2 += [local_projection_preview.scatter(aproximation_3d_face[:,0],aproximation_3d_face[:,1], c='r')]
 
-    # prepare source landmarks for 3D transformation
-    # 0 for ignore z component, 1 for indicating this is a position to comply to 4x4 * 4 vector multiplication
-
-  
-    #srcLandmarks_from_camera = np.squeeze(np.matmul(cv2.convertPointsToHomogeneous(np.array(srcLandmarks)), np.linalg.inv(source_cam_matrix)))
-    #srcLandmarks_from_camera = np.array([v * w for v, w in zip(srcLandmarks_from_camera,srcLandmarks_from_camera[:,2])])
-    #src_2d_scaled_landmarks = np.array([x - srcLandmarks[NOSE_TIP] for x in srcLandmarks])
+        transformed_source_landmarks3, _ = project_back(transformed_source_landmarks3, target_rotation, target_translation, target_cam_matrix)
     
-    # def to3d(x): return (x[0], x[1], 0, 1)
-    # src_3d_landmarks = map(to3d, srcLandmarks)
-    # src_3d_landmarks = np.array(list(src_3d_landmarks), dtype=np.float64)
+        transformed_source_landmarks3 = np.array(transformed_source_landmarks3)
 
-    # likeley will need to project back to 2D
+        scatters += [projection_preview.scatter(transformed_source_landmarks3[:, 0], -transformed_source_landmarks3[:, 1], c='b')]
+        for preview_landmark in transformed_source_landmarks3[:,:2]:
+            trgWindow.add_patch(matplotlib.patches.Circle(preview_landmark, 2, color='#FF0000'))
+        for preview_src_landmark in srcLandmarks:
+            srcWindow.add_patch(matplotlib.patches.Circle(preview_src_landmark, 2, color='#FF0000'))
 
-    #transformed_source_landmarks = cv2.transform(cv2.transform(src_3d_landmarks ,source_inverse_t_matrix), target_t_matrix)
-    # no need to transform twice as project back will handle going from local space 3d to camera space 2D
-    #transformed_source_landmarks = cv2.transform(src_3d_landmarks ,source_inverse_t_matrix)
-    # this fails because openCV is silly and it's assertion messages are silly
+        transformed_source_landmarks3 = list(map(tuple, transformed_source_landmarks3))
+        scatters += [projection_preview.scatter(np.array(trgLandmarks)[:, 0], -np.array(trgLandmarks)[:, 1], c='g')]
+        ideal_projection, _ =cv2.projectPoints(aproximation_3d_face, target_rotation, target_translation, target_cam_matrix, None)
+        ideal_projection = np.squeeze(ideal_projection)
+        scatters += [projection_preview.scatter(ideal_projection[:, 0], -ideal_projection[:, 1], c='r')]
 
-    # this seems to work
-    #transformed_source_landmarks2 = np.matmul(src_3d_landmarks, source_inverse_t_matrix)
-    #transformed_source_landmarks2 = np.matmul(transformed_source_landmarks2,  np.linalg.inv(source_cam_matrix))
-    #transformed_source_landmarks2 = np.array([v / w for v, w in zip(transformed_source_landmarks2,transformed_source_landmarks2[:,3])])
-
-    # back_projection, _ = cv2.projectPoints(aproximation_3d_face, source_rotation, source_translation, source_cam_matrix, None)
-    # back_projection = np.squeeze(back_projection)
-    # # so this does not work
-  
-    # hom_cam = np.array([
-    #     [source_cam_matrix[0,0],source_cam_matrix[0,1],source_cam_matrix[0,2]],
-    #     [source_cam_matrix[1,0],source_cam_matrix[1,1],source_cam_matrix[1,2]],
-    #     [source_cam_matrix[2,0],source_cam_matrix[2,1],source_cam_matrix[2,2]],
-    #     [0,0,0]
-    # ])
-    # P_mat = np.matmul(source_t_matrix, hom_cam)
-    # back_projection = np.matmul(np.array(list(map(lambda x : (x[0],x[1],x[2],1),aproximation_3d_face))),P_mat)
-    # back_projection = np.array([x / w for x, w in zip(back_projection[:,:2],back_projection[3])])
-
-
-    #scatters += [trg_m2s_win.scatter(np.array(srcLandmarks)[:, 0], np.array(srcLandmarks)[:, 1],c='black')]
-    # scatters += [trg_m2s_win.scatter(back_projection[:,0], back_projection[:,1],c='red')]
-    # scatters += [trg_m2s_win.scatter(transformed_source_landmarks2[:, 0], transformed_source_landmarks2[:, 1],c='blue')]
-
-
-
-    # if abs(transformed_source_landmarks2[:, :2].min()) > 1000 or abs(transformed_source_landmarks2[:, 2].max()) > 1000:
-    #     print("NO")
-    #     trg_m2s_win.set_xlim(-500, 500)
-    #     trg_m2s_win.set_ylim(-500, 500)
-    #     trg_m2s_win.autoscale(False)
-
-    # for landmark in transformed_source_landmarks2:
-    #     trg_m2s_win.add_patch(matplotlib.patches.Circle(landmark[0:1], 2))
-
-    # #demote from 4d to 3d
-   # transformed_source_landmarks3 = transformed_source_landmarks2[:, :3]
-    transformed_source_landmarks3 = match_to_model_face(srcLandmarks) 
-
-    scatters2 += [local_projection_preview.scatter(transformed_source_landmarks3[:, 0], transformed_source_landmarks3[:, 1], c='b')]
-    scatters2 += [local_projection_preview.scatter(aproximation_3d_face[:,0],aproximation_3d_face[:,1], c='r')]
-
-    transformed_source_landmarks3, _ = project_back(transformed_source_landmarks3, target_rotation, target_translation, target_cam_matrix)
-    
-    transformed_source_landmarks3 = np.array(transformed_source_landmarks3)
-
-    if abs(transformed_source_landmarks3.min()) > 1000 or abs(transformed_source_landmarks3.max()) > 1000:
-        print("NO")
-        projection_preview.set_xlim(-500, 500)
-        projection_preview.set_ylim(-500, 500)
-
-   
-    # do not move arround nose or face edges
-
-    
-
-    scatters += [projection_preview.scatter(transformed_source_landmarks3[:, 0], -transformed_source_landmarks3[:, 1], c='b')]
-    for preview_landmark in transformed_source_landmarks3[:,:2]:
-        trgWindow.add_patch(matplotlib.patches.Circle(preview_landmark, 2, color='#FF0000'))
-    for preview_src_landmark in srcLandmarks:
-        srcWindow.add_patch(matplotlib.patches.Circle(preview_src_landmark, 2, color='#FF0000'))
-
-    transformed_source_landmarks3 = list(map(tuple, transformed_source_landmarks3))
-    scatters += [projection_preview.scatter(np.array(trgLandmarks)[:, 0], -np.array(trgLandmarks)[:, 1], c='g')]
-    ideal_projection, _ =cv2.projectPoints(aproximation_3d_face, target_rotation, target_translation, target_cam_matrix, None)
-    ideal_projection = np.squeeze(ideal_projection)
-    scatters += [projection_preview.scatter(ideal_projection[:, 0], -ideal_projection[:, 1], c='r')]
-
-    source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks3[17:27] + trgLandmarks[27:36] + transformed_source_landmarks3[36:]
-    #source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks[17:27] + trgLandmarks[27:36] + transformed_source_landmarks[36:]
+    if use3D:
+        source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks3[17:27] + trgLandmarks[27:36] + transformed_source_landmarks3[36:]
+    else:
+        source_to_target_landmarks = trgLandmarks[0:17] + transformed_source_landmarks[17:27] + trgLandmarks[27:36] + transformed_source_landmarks[36:]
 
     source_to_target_triangles = landmark_indices_to_triangles(source_to_target_landmarks, srcLandmarkTrianglesIndices)
 
@@ -333,7 +264,7 @@ def transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler
 
     # placeholder - cludge - subtract 25 from Y coordinate if using main axis as center of face
     # do not if using CoM
-    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask, (int(target_face_center[0]), int(target_face_center[1])-10), cv2.NORMAL_CLONE)
+    finalFrame = cv2.seamlessClone(res_frame_with_mouth, np.copy(targetFrame), cloneMask, (int(target_face_center[0]), int(target_face_center[1])-15), cv2.NORMAL_CLONE)
 
     profiler.tock()
     return finalFrame, source_to_target_landmarks, srcLandmarkTrianglesIndices, srcLandmarks, trgLandmarks

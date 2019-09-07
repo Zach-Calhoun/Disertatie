@@ -87,10 +87,6 @@ srcLandmarkTrianglesIndices = []
 
 lastSourceLandmarks = None
 
-def calc_deltas(pair):
-    start = pair[0]
-    end = pair[1]
-    return np.subtract(start,end)
 
 while targetSuccess and sourceSuccess:
  
@@ -200,7 +196,7 @@ while targetSuccess and sourceSuccess:
     # else:
     #     resFrame = np.copy(targetFrame)
     resFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
-    
+    finalFrame = np.zeros((trg_h, trg_w,3), dtype=np.uint8)
     for i, transform in enumerate(transforms):
         #skip while debugging triangles
         if(DEBUG_TRIANGLES):

@@ -27,6 +27,7 @@ parser.add_argument("--blank", required=False, action='store_true', help="includ
 parser.add_argument("--slow", required=False, action='store_true', help="include this to see the face reconstruction in a slow rate for debugging purposes")
 parser.add_argument("--srcscale", type=float, required=False, metavar=1, help="Specify scaling of source frames ( use smaller values to improve performance )", default=0.25)
 parser.add_argument("--trgscale", type=float, required=False, metavar=1, help="Specify scaling of target frames ( use smaller values to improve performance )", default=0.25)
+parser.add_argument("--use3D", required=False, action='store_true', help="Specify to use 3D transfer method instead of 2D")
 
 args = parser.parse_args()
 
@@ -125,6 +126,7 @@ srcLandmarkTrianglesIndices = []
 #reopen clips to reset capture
 source = cv2.VideoCapture(sourceName)
 target = cv2.VideoCapture(targetName)
+sourceFPS = source.get(cv2.CAP_PROP_FPS)
 
 base_output_folder = 'debug\\{}'.format(outputName)
 if not os.path.exists(base_output_folder):
@@ -134,7 +136,7 @@ base_output_path = base_output_folder+'\\{}.jpeg'
 
 
 while targetSuccess and sourceSuccess:
- 
+    use3D = args.use3D
     print("Processing frame {} ...".format(frameCount))
     frameCount = frameCount + 1
 
@@ -156,15 +158,18 @@ while targetSuccess and sourceSuccess:
 
    
 
-    sourceToTarget, newTargetLandmarks, triangle_landmark_indices, source_frame_landmarks, target_landmarks = transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler)
-    transformedTargetPlot.set_data(sourceToTarget)
+    sourceToTarget, newTargetLandmarks, triangle_landmark_indices, source_frame_landmarks, target_landmarks = transfer_expression(sourceFrame, targetFrame, trgWindow, srcWindow, profiler, use3D)
 
-    sourceToProto, newProtoLandmarks, _ , _, _ = transfer_expression(sourceFrame, target_prototype, protoWindow, srcWindow, profiler)
-    transformedProtoPlot.set_data(sourceToProto)
+
+    sourceToProto, newProtoLandmarks, _ , _, _ = transfer_expression(sourceFrame, target_prototype, protoWindow, srcWindow, profiler, use3D)
+
+    
     #sourceToProto, newProtoLandmarks, _ , _= transfer_expression(sourceFrame, targetFrame, protoWindow, srcWindow, profiler)
     if(sourceToTarget is None or sourceToProto is None):
         continue
 
+    transformedTargetPlot.set_data(sourceToTarget)
+    transformedProtoPlot.set_data(sourceToProto)
     protoToSource = transfer_poly(sourceToTarget, sourceToProto, newTargetLandmarks, newProtoLandmarks)
     #protoToSource = transfer_poly(sourceToProto,sourceToTarget, newProtoLandmarks, newTargetLandmarks)
 
@@ -174,7 +179,7 @@ while targetSuccess and sourceSuccess:
     cloneMask = cv2.erode(cloneMask, np.ones((5,5)))
     #finalFrame = cv2.seamlessClone(protoToSource, np.copy(targetFrame), cloneMask ,(int(trg_w/2),int(trg_h/2)),cv2.NORMAL_CLONE)
     target_face_center, _, _, _, target_local_landmarks  = get_face_coordinates_system(target_landmarks);
-    finalFrame = cv2.seamlessClone(protoToSource, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1])),cv2.NORMAL_CLONE)
+    finalFrame = cv2.seamlessClone(protoToSource, np.copy(targetFrame), cloneMask ,(int(target_face_center[0]),int(target_face_center[1]-10)),cv2.NORMAL_CLONE)
 
    # finalFrame = protoToSource;
     #protoToSource = transfer_face(sourceToProto, sourceToTarget, newProtoLandmarks, newTargetLandmarks, triangle_landmark_indices)
@@ -198,7 +203,7 @@ while targetSuccess and sourceSuccess:
     cv2.imwrite(final_out_path, cv2.cvtColor(finalFrame, cv2.COLOR_RGB2BGR))
 
     if args.output and output is None:
-        output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), 20.0, (finalFrame.shape[1], finalFrame.shape[0]))
+        output = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc('m', 'j', 'p', 'g'), sourceFPS, (finalFrame.shape[1], finalFrame.shape[0]))
     if output:
         output.write(np.uint8(cv2.cvtColor(finalFrame, cv2.COLOR_RGB2BGR)))
     print("Done one full frame process")
